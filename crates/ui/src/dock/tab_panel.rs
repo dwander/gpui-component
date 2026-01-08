@@ -441,6 +441,7 @@ impl TabPanel {
         }
 
         let zoomed = self.zoomed;
+        let locked = self.is_locked(cx);
         let view = cx.entity().clone();
         let zoomable_toolbar_visible = state.zoomable.map_or(false, |v| v.toolbar_visible());
 
@@ -480,38 +481,40 @@ impl TabPanel {
                     this
                 }
             })
-            .child(
-                Button::new("menu")
-                    .icon(IconName::Ellipsis)
-                    .xsmall()
-                    .ghost()
-                    .tab_stop(false)
-                    .dropdown_menu({
-                        let zoomable = state.zoomable.map_or(false, |v| v.menu_visible());
-                        let closable = state.closable;
+            .when(!locked, |this| {
+                let zoomable = state.zoomable.map_or(false, |v| v.menu_visible());
+                let closable = state.closable;
 
-                        move |menu, window, cx| {
-                            view.update(cx, |this, cx| {
-                                this.dropdown_menu(menu, window, cx)
-                                    .separator()
-                                    .menu_with_disabled(
-                                        if zoomed {
-                                            t!("Dock.Zoom Out")
-                                        } else {
-                                            t!("Dock.Zoom In")
-                                        },
-                                        Box::new(ToggleZoom),
-                                        !zoomable,
-                                    )
-                                    .when(closable, |this| {
-                                        this.separator()
-                                            .menu(t!("Dock.Close"), Box::new(ClosePanel))
-                                    })
-                            })
-                        }
-                    })
-                    .anchor(Corner::TopRight),
-            )
+                this.child(
+                    Button::new("menu")
+                        .icon(IconName::Ellipsis)
+                        .xsmall()
+                        .ghost()
+                        .tab_stop(false)
+                        .dropdown_menu({
+                            move |menu, window, cx| {
+                                view.update(cx, |this, cx| {
+                                    this.dropdown_menu(menu, window, cx)
+                                        .separator()
+                                        .menu_with_disabled(
+                                            if zoomed {
+                                                t!("Dock.Zoom Out")
+                                            } else {
+                                                t!("Dock.Zoom In")
+                                            },
+                                            Box::new(ToggleZoom),
+                                            !zoomable,
+                                        )
+                                        .when(closable, |this| {
+                                            this.separator()
+                                                .menu(t!("Dock.Close"), Box::new(ClosePanel))
+                                        })
+                                })
+                            }
+                        })
+                        .anchor(Corner::TopRight),
+                )
+            })
     }
 
     fn render_dock_toggle_button(
