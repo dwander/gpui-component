@@ -148,8 +148,8 @@ impl ControlIcon {
     }
 }
 
-impl RenderOnce for ControlIcon {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+impl ControlIcon {
+    fn render_with_active(self, window_active: bool, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let is_linux = cfg!(target_os = "linux");
         let is_windows = cfg!(target_os = "windows");
         let hover_fg = self.hover_fg(cx);
@@ -161,6 +161,12 @@ impl RenderOnce for ControlIcon {
             _ => None,
         };
 
+        let fg_color = if window_active {
+            cx.theme().foreground
+        } else {
+            cx.theme().muted_foreground
+        };
+
         div()
             .id(self.id())
             .flex()
@@ -170,7 +176,7 @@ impl RenderOnce for ControlIcon {
             .justify_center()
             .content_center()
             .items_center()
-            .text_color(cx.theme().foreground)
+            .text_color(fg_color)
             .hover(|style| style.bg(hover_bg).text_color(hover_fg))
             .active(|style| style.bg(active_bg).text_color(hover_fg))
             .when(is_windows, |this| {
@@ -200,13 +206,20 @@ impl RenderOnce for ControlIcon {
     }
 }
 
+impl RenderOnce for ControlIcon {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        self.render_with_active(window.is_window_active(), window, cx)
+    }
+}
+
 #[derive(IntoElement)]
 struct WindowControls {
+    window_active: bool,
     on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>,
 }
 
 impl RenderOnce for WindowControls {
-    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         if cfg!(target_os = "macos") {
             return div().id("window-controls");
         }
@@ -216,13 +229,13 @@ impl RenderOnce for WindowControls {
             .items_center()
             .flex_shrink_0()
             .h_full()
-            .child(ControlIcon::minimize())
+            .child(ControlIcon::minimize().render_with_active(self.window_active, window, cx))
             .child(if window.is_maximized() {
-                ControlIcon::restore()
+                ControlIcon::restore().render_with_active(self.window_active, window, cx)
             } else {
-                ControlIcon::maximize()
+                ControlIcon::maximize().render_with_active(self.window_active, window, cx)
             })
-            .child(ControlIcon::close(self.on_close_window))
+            .child(ControlIcon::close(self.on_close_window).render_with_active(self.window_active, window, cx))
     }
 }
 
@@ -254,8 +267,16 @@ impl RenderOnce for TitleBar {
         let is_client_decorated = matches!(window.window_decorations(), Decorations::Client { .. });
         let is_linux = cfg!(target_os = "linux");
         let is_macos = cfg!(target_os = "macos");
+        let window_active = window.is_window_active();
 
         let state = window.use_state(cx, |_, _| TitleBarState { should_move: false });
+
+        // 비활성 상태일 때 텍스트 색상을 흐리게
+        let text_color = if window_active {
+            cx.theme().foreground
+        } else {
+            cx.theme().muted_foreground
+        };
 
         div().flex_shrink_0().child(
             div()
@@ -269,6 +290,7 @@ impl RenderOnce for TitleBar {
                 .border_b_1()
                 .border_color(cx.theme().title_bar_border)
                 .bg(cx.theme().title_bar)
+                .text_color(text_color)
                 .refine_style(&self.style)
                 .when(is_linux, |this| {
                     this.on_double_click(|_, window, _| window.zoom_window())
@@ -322,6 +344,7 @@ impl RenderOnce for TitleBar {
                         .children(self.children),
                 )
                 .child(WindowControls {
+                    window_active,
                     on_close_window: self.on_close_window,
                 }),
         )
