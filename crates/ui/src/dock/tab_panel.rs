@@ -30,6 +30,7 @@ struct TabState {
     draggable: bool,
     droppable: bool,
     active_panel: Option<Arc<dyn PanelView>>,
+    tab_bar_visible: bool,
 }
 
 #[derive(Clone)]
@@ -1178,12 +1179,18 @@ impl Render for TabPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         let focus_handle = self.focus_handle(cx);
         let active_panel = self.active_panel(cx);
+        let tab_bar_visible = active_panel
+            .as_ref()
+            .map(|p| p.tab_bar_visible(cx))
+            .unwrap_or(true);
+
         let state = TabState {
             closable: self.closable(cx),
             draggable: self.draggable(cx),
             droppable: self.droppable(cx),
             zoomable: self.zoomable(cx),
             active_panel,
+            tab_bar_visible,
         };
 
         self.bind_actions(cx)
@@ -1193,7 +1200,9 @@ impl Render for TabPanel {
             .size_full()
             .overflow_hidden()
             .bg(cx.theme().tab_bar)
-            .child(self.render_title_bar(&state, window, cx))
+            .when(state.tab_bar_visible, |this| {
+                this.child(self.render_title_bar(&state, window, cx))
+            })
             .child(self.render_active_panel(&state, window, cx))
     }
 }

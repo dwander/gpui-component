@@ -107,6 +107,14 @@ pub trait Panel: EventEmitter<PanelEvent> + Render + Focusable {
         true
     }
 
+    /// Return false to hide tab bar header, true to show, default is `true`.
+    ///
+    /// When this returns false, the panel's tab bar header will be hidden,
+    /// useful when the panel has its own internal tab bar.
+    fn tab_bar_visible(&self, _cx: &App) -> bool {
+        true
+    }
+
     /// Set active state of the panel.
     ///
     /// This method will be called when the panel is active or inactive.
@@ -175,6 +183,7 @@ pub trait PanelView: 'static + Send + Sync {
     fn closable(&self, cx: &App) -> bool;
     fn zoomable(&self, cx: &App) -> Option<PanelControl>;
     fn visible(&self, cx: &App) -> bool;
+    fn tab_bar_visible(&self, cx: &App) -> bool;
     fn set_active(&self, active: bool, window: &mut Window, cx: &mut App);
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App);
     fn on_added_to(&self, tab_panel: WeakEntity<TabPanel>, window: &mut Window, cx: &mut App);
@@ -225,6 +234,10 @@ impl<T: Panel> PanelView for Entity<T> {
 
     fn visible(&self, cx: &App) -> bool {
         self.read(cx).visible(cx)
+    }
+
+    fn tab_bar_visible(&self, cx: &App) -> bool {
+        self.read(cx).tab_bar_visible(cx)
     }
 
     fn set_active(&self, active: bool, window: &mut Window, cx: &mut App) {
