@@ -390,20 +390,7 @@ impl TabPanel {
             return true;
         }
 
-        self.stack_panel.is_none()
-    }
-
-    /// Return true if self or parent only have last panel.
-    fn is_last_panel(&self, cx: &App) -> bool {
-        if let Some(parent) = &self.stack_panel {
-            if let Some(stack_panel) = parent.upgrade() {
-                if !stack_panel.read(cx).is_last_panel(cx) {
-                    return false;
-                }
-            }
-        }
-
-        self.panels.len() <= 1
+        false
     }
 
     /// Return all visible panels
@@ -419,9 +406,20 @@ impl TabPanel {
 
     /// Return true if the tab panel is draggable.
     ///
-    /// E.g. if the parent and self only have one panel, it is not draggable.
+    /// Checks if the dock area is locked and if the active panel allows dragging.
     fn draggable(&self, cx: &App) -> bool {
-        !self.is_locked(cx) && !self.is_last_panel(cx)
+        if self.is_locked(cx) {
+            return false;
+        }
+
+        // Check if active panel allows dragging
+        if let Some(active_panel) = self.active_panel(cx) {
+            if !active_panel.draggable(cx) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Return true if the tab panel is droppable.
@@ -1002,7 +1000,12 @@ impl TabPanel {
 
         let stack_panel = match self.stack_panel.as_ref().and_then(|panel| panel.upgrade()) {
             Some(panel) => panel,
-            None => return,
+            None => {
+                // No stack_panel means this TabPanel is directly in a Dock (left/right/bottom)
+                // We need to create a new StackPanel and update the Dock
+                self.split_panel_in_dock(new_tab_panel, placement, size, window, cx);
+                return;
+            }
         };
 
         let parent_axis = stack_panel.read(cx).axis;
@@ -1099,6 +1102,121 @@ impl TabPanel {
             })
             .detach()
         }
+
+        cx.emit(PanelEvent::LayoutChanged);
+    }
+
+    /// Handle split when this TabPanel is directly in a Dock (no stack_panel parent)
+    fn split_panel_in_dock(
+        &self,
+        new_tab_panel: Entity<TabPanel>,
+        placement: Placement,
+        size: Option<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(dock_area) = self.dock_area.upgrade() else {
+            return;
+        };
+
+        let tab_panel = cx.entity().clone();
+        let tab_panel_entity_id = tab_panel.entity_id();
+
+        // Find which dock contains this TabPanel
+        let dock = {
+            let dock_area_read = dock_area.read(cx);
+            let mut found_dock = None;
+
+            if let Some(left_dock) = &dock_area_read.left_dock {
+                if let super::DockItem::Tabs { view, .. } = &left_dock.read(cx).panel {
+                    if view.entity_id() == tab_panel_entity_id {
+                        found_dock = Some(left_dock.clone());
+                    }
+                }
+            }
+            if found_dock.is_none() {
+                if let Some(right_dock) = &dock_area_read.right_dock {
+                    if let super::DockItem::Tabs { view, .. } = &right_dock.read(cx).panel {
+                        if view.entity_id() == tab_panel_entity_id {
+                            found_dock = Some(right_dock.clone());
+                        }
+                    }
+                }
+            }
+            if found_dock.is_none() {
+                if let Some(bottom_dock) = &dock_area_read.bottom_dock {
+                    if let super::DockItem::Tabs { view, .. } = &bottom_dock.read(cx).panel {
+                        if view.entity_id() == tab_panel_entity_id {
+                            found_dock = Some(bottom_dock.clone());
+                        }
+                    }
+                }
+            }
+            found_dock
+        };
+
+        let Some(dock) = dock else {
+            return;
+        };
+
+        // Create a new StackPanel with the appropriate axis
+        let new_stack_panel = cx.new(|cx| StackPanel::new(placement.axis(), window, cx));
+        let dock_area_weak = self.dock_area.clone();
+
+        // Add panels to the new StackPanel in the correct order
+        // Note: StackPanel::add_panel will automatically set stack_panel via set_parent in window.defer
+        new_stack_panel.update(cx, |view, cx| match placement {
+            Placement::Left | Placement::Top => {
+                view.add_panel(
+                    Arc::new(new_tab_panel.clone()),
+                    size,
+                    dock_area_weak.clone(),
+                    window,
+                    cx,
+                );
+                view.add_panel(
+                    Arc::new(tab_panel.clone()),
+                    None,
+                    dock_area_weak.clone(),
+                    window,
+                    cx,
+                );
+            }
+            Placement::Right | Placement::Bottom => {
+                view.add_panel(
+                    Arc::new(tab_panel.clone()),
+                    None,
+                    dock_area_weak.clone(),
+                    window,
+                    cx,
+                );
+                view.add_panel(
+                    Arc::new(new_tab_panel.clone()),
+                    size,
+                    dock_area_weak.clone(),
+                    window,
+                    cx,
+                );
+            }
+        });
+
+        // Update the Dock's panel to the new StackPanel
+        let new_dock_item = super::DockItem::Split {
+            axis: placement.axis(),
+            size: None,
+            items: vec![], // Items are managed by StackPanel
+            sizes: vec![],
+            view: new_stack_panel.clone(),
+        };
+
+        dock.update(cx, |dock, cx| {
+            dock.set_panel(new_dock_item, window, cx);
+        });
+
+        // Subscribe to the new stack panel's events
+        dock_area.update(cx, |area, cx| {
+            area.subscribe_panel(&new_stack_panel, window, cx);
+        });
 
         cx.emit(PanelEvent::LayoutChanged);
     }
