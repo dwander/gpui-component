@@ -634,6 +634,7 @@ impl TabPanel {
         let is_bottom_dock = bottom_dock_button.is_some();
 
         let panel_style = dock_area.read(cx).panel_style;
+        let tab_size = dock_area.read(cx).tab_size;
         let visible_panels = self.visible_panels(cx).collect::<Vec<_>>();
 
         if visible_panels.len() == 1 && panel_style == PanelStyle::default() {
@@ -645,13 +646,25 @@ impl TabPanel {
 
             let title_style = panel.title_style(cx);
 
+            // Match TabBar height and text size based on tab_size
+            let (title_height, title_py, title_px) = match tab_size {
+                crate::Size::XSmall => (px(20.), px(2.), px(8.)),
+                crate::Size::Large => (px(36.), px(8.), px(16.)),
+                _ => (px(30.), px(8.), px(12.)),
+            };
+
             return h_flex()
                 .justify_between()
                 .line_height(rems(1.0))
-                .h(px(30.))
-                .py_2()
-                .pl_3()
-                .pr_2()
+                .h(title_height)
+                .py(title_py)
+                .pl(title_px)
+                .pr(title_px)
+                .map(|this| match tab_size {
+                    crate::Size::XSmall => this.text_xs(),
+                    crate::Size::Large => this.text_base(),
+                    _ => this.text_sm(),
+                })
                 .when(left_dock_button.is_some(), |this| this.pl_2())
                 .when(right_dock_button.is_some(), |this| this.pr_2())
                 .when_some(title_style, |this, theme| {
@@ -702,8 +715,10 @@ impl TabPanel {
         }
 
         let tabs_count = self.panels.len();
+        let tab_size = dock_area.read(cx).tab_size;
 
         TabBar::new("tab-bar")
+            .with_size(tab_size)
             .track_scroll(&self.tab_bar_scroll_handle)
             .when(has_extend_dock_button, |this| {
                 this.prefix(

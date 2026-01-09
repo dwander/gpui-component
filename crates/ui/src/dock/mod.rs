@@ -14,6 +14,8 @@ use gpui::{
 };
 use std::sync::Arc;
 
+use crate::Size;
+
 pub use dock::*;
 pub use panel::*;
 pub use stack_panel::*;
@@ -69,6 +71,9 @@ pub struct DockArea {
 
     /// The panel style, default is [`PanelStyle::Default`](PanelStyle::Default).
     pub(crate) panel_style: PanelStyle,
+
+    /// The tab bar size, default is [`Size::default()`](Size::default()).
+    pub(crate) tab_size: Size,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -546,6 +551,7 @@ impl DockArea {
             bottom_dock: None,
             locked: false,
             panel_style: PanelStyle::default(),
+            tab_size: Size::default(),
             _subscriptions: vec![],
         };
 
@@ -581,6 +587,12 @@ impl DockArea {
     /// Set the panel style of the dock area.
     pub fn panel_style(mut self, style: PanelStyle) -> Self {
         self.panel_style = style;
+        self
+    }
+
+    /// Set the tab bar size for all panels.
+    pub fn tab_size(mut self, size: Size) -> Self {
+        self.tab_size = size;
         self
     }
 
