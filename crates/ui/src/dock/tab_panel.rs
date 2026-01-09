@@ -427,8 +427,20 @@ impl TabPanel {
     /// Return true if the tab panel is droppable.
     ///
     /// E.g. if the tab panel is locked, it is not droppable.
+    /// Also checks if the active panel allows dropping.
     fn droppable(&self, cx: &App) -> bool {
-        !self.is_locked(cx)
+        if self.is_locked(cx) {
+            return false;
+        }
+
+        // Check if active panel allows dropping
+        if let Some(active_panel) = self.active_panel(cx) {
+            if !active_panel.droppable(cx) {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn render_toolbar(
