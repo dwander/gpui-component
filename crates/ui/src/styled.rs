@@ -1,7 +1,7 @@
 use crate::{ActiveTheme, PixelsExt as _};
 use gpui::{
     App, BoxShadow, Corners, DefiniteLength, Div, Edges, FocusHandle, Hsla, ParentElement, Pixels,
-    Refineable, StyleRefinement, Styled, Window, div, point, px,
+    Refineable, StyleRefinement, Styled, Window, div, hsla, point, px,
 };
 use serde::{Deserialize, Serialize};
 
@@ -174,12 +174,35 @@ pub trait StyledExt: Styled + Sized {
 
     /// Set as Popover style
     #[inline]
-    fn popover_style(self, cx: &App) -> Self {
+    fn popover_style(mut self, cx: &App) -> Self {
+        // 은은하게 퍼지는 부드러운 그림자 효과
+        self.style().box_shadow = Some(vec![
+            // 가장 바깥쪽: 넓게 퍼지는 아주 연한 그림자
+            BoxShadow {
+                color: hsla(0., 0., 0., 0.03),
+                offset: point(px(0.), px(8.)),
+                blur_radius: px(32.),
+                spread_radius: px(4.),
+            },
+            // 중간: 적당히 퍼지는 그림자
+            BoxShadow {
+                color: hsla(0., 0., 0., 0.05),
+                offset: point(px(0.), px(4.)),
+                blur_radius: px(16.),
+                spread_radius: px(2.),
+            },
+            // 가장 안쪽: 경계 근처의 미세한 그림자
+            BoxShadow {
+                color: hsla(0., 0., 0., 0.08),
+                offset: point(px(0.), px(1.)),
+                blur_radius: px(4.),
+                spread_radius: px(0.),
+            },
+        ]);
         self.bg(cx.theme().popover)
             .text_color(cx.theme().popover_foreground)
             .border_1()
             .border_color(cx.theme().border)
-            .shadow_lg()
             .rounded(cx.theme().radius)
     }
 
