@@ -170,11 +170,11 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
                             deferred(
                                 anchored().child(
                                     div()
+                                        .id("context-menu-backdrop")
                                         .w(window.bounds().size.width)
                                         .h(window.bounds().size.height)
-                                        .on_scroll_wheel(|_, _, cx| {
-                                            cx.stop_propagation();
-                                        })
+                                        // 배경 요소의 hover 상태 차단
+                                        .occlude()
                                         .child(
                                             anchored()
                                                 .position(position)
