@@ -381,6 +381,10 @@ impl RenderOnce for Popover {
                         state.toggle_open(window, cx);
                     });
                     cx.notify(parent_view_id);
+                    // Force immediate window refresh to ensure popover renders on first click.
+                    // Without this, the popover may not appear until the next mouse move event.
+                    cx.refresh_windows();
+                    window.refresh();
                 }
             })
             .on_prepaint({
@@ -405,7 +409,10 @@ impl RenderOnce for Popover {
                     this.child(state.update(cx, |state, cx| (content)(state, window, cx)))
                 })
                 .children(self.children)
-                .when(content_bounds.is_empty(), |this| this.invisible())
+                // Removed `.when(content_bounds.is_empty(), |this| this.invisible())` to fix
+                // popover not appearing on first click. The invisible() was intended for initial
+                // bounds measurement, but caused the popover to be hidden until the next render
+                // cycle, which may not happen without user interaction (e.g., mouse move).
                 .on_prepaint({
                     let state = state.clone();
                     move |bounds, _, cx| {
