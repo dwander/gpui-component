@@ -1,8 +1,9 @@
 use gpui::{
     AnyElement, App, Bounds, Context, ElementId, InteractiveElement as _, IntoElement,
     ParentElement, Pixels, Render, RenderOnce, StatefulInteractiveElement, StyleRefinement, Styled,
-    Task, Timer, Window, div, prelude::FluentBuilder as _,
+    Task, Window, div, prelude::FluentBuilder as _,
 };
+use smol::Timer;
 use std::rc::Rc;
 use std::time::Duration;
 

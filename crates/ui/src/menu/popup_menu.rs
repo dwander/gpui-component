@@ -12,8 +12,9 @@ use gpui::{
 };
 use gpui::{
     ClickEvent, Half, MouseButton, MouseDownEvent, MouseUpEvent, OwnedMenuItem, Point, Subscription,
-    Task, Timer,
+    Task,
 };
+use smol::Timer;
 use std::rc::Rc;
 use std::time::Duration;
 
