@@ -39,6 +39,8 @@ pub struct DropdownMenuPopover<T: Selectable + IntoElement + 'static> {
     anchor: Corner,
     trigger: T,
     builder: Rc<dyn Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu>,
+    /// If true, the menu will automatically dismiss when mouse leaves the menu area.
+    auto_dismiss_on_hover_out: bool,
 }
 
 impl<T> DropdownMenuPopover<T>
@@ -57,12 +59,24 @@ where
             anchor: anchor.into(),
             trigger,
             builder: Rc::new(builder),
+            auto_dismiss_on_hover_out: false,
         }
     }
 
     /// Set the anchor corner for the dropdown menu popover.
     pub fn anchor(mut self, anchor: impl Into<Corner>) -> Self {
         self.anchor = anchor.into();
+        self
+    }
+
+    /// Set whether to auto-dismiss the menu when mouse leaves the menu area.
+    ///
+    /// When enabled, the menu will automatically close after a short delay (default 300ms)
+    /// when the mouse cursor moves outside the menu area.
+    ///
+    /// Default is `false`.
+    pub fn auto_dismiss_on_hover_out(mut self, enabled: bool) -> Self {
+        self.auto_dismiss_on_hover_out = enabled;
         self
     }
 
@@ -84,6 +98,7 @@ where
 {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         let builder = self.builder.clone();
+        let auto_dismiss_on_hover_out = self.auto_dismiss_on_hover_out;
         let menu_state =
             window.use_keyed_state(self.id.clone(), cx, |_, _| DropdownMenuState::default());
 
@@ -106,6 +121,7 @@ where
                         let builder = builder.clone();
                         let menu = PopupMenu::build(window, cx, move |menu, window, cx| {
                             builder(menu, window, cx)
+                                .auto_dismiss_on_hover_out(auto_dismiss_on_hover_out)
                         });
                         menu_state.update(cx, |state, _| {
                             state.menu = Some(menu.clone());

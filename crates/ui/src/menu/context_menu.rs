@@ -33,6 +33,8 @@ pub struct ContextMenu<E: ParentElement + Styled + Sized> {
     // This is not in use, just for style refinement forwarding.
     _ignore_style: StyleRefinement,
     anchor: Corner,
+    /// If true, the menu will automatically dismiss when mouse leaves the menu area.
+    auto_dismiss_on_hover_out: bool,
 }
 
 impl<E: ParentElement + Styled> ContextMenu<E> {
@@ -44,6 +46,7 @@ impl<E: ParentElement + Styled> ContextMenu<E> {
             menu: None,
             anchor: Corner::TopLeft,
             _ignore_style: StyleRefinement::default(),
+            auto_dismiss_on_hover_out: false,
         }
     }
 
@@ -54,6 +57,17 @@ impl<E: ParentElement + Styled> ContextMenu<E> {
         F: Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
     {
         self.menu = Some(Rc::new(builder));
+        self
+    }
+
+    /// Set whether to auto-dismiss the menu when mouse leaves the menu area.
+    ///
+    /// When enabled, the menu will automatically close after a short delay (default 300ms)
+    /// when the mouse cursor moves outside the menu area.
+    ///
+    /// Default is `false`.
+    pub fn auto_dismiss_on_hover_out(mut self, enabled: bool) -> Self {
+        self.auto_dismiss_on_hover_out = enabled;
         self
     }
 
@@ -255,6 +269,7 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         let shared_state = request_layout.shared_state.clone();
         let builder = self.menu.clone();
         let hitbox = hitbox.clone();
+        let auto_dismiss_on_hover_out = self.auto_dismiss_on_hover_out;
 
         // When right mouse click, to build content menu, and show it at the mouse position.
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
@@ -279,9 +294,10 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
                     move |window, cx| {
                         let menu = PopupMenu::build(window, cx, move |menu, window, cx| {
                             let Some(build) = &builder else {
-                                return menu;
+                                return menu.auto_dismiss_on_hover_out(auto_dismiss_on_hover_out);
                             };
                             build(menu, window, cx)
+                                .auto_dismiss_on_hover_out(auto_dismiss_on_hover_out)
                         });
 
                         // Set up the subscription for dismiss handling

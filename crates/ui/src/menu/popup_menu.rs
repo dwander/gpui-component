@@ -12,8 +12,10 @@ use gpui::{
 };
 use gpui::{
     ClickEvent, Half, MouseButton, MouseDownEvent, MouseUpEvent, OwnedMenuItem, Point, Subscription,
+    Task, Timer,
 };
 use std::rc::Rc;
+use std::time::Duration;
 
 const CONTEXT: &str = "PopupMenu";
 
@@ -292,6 +294,13 @@ pub struct PopupMenu {
     // This will update on render
     submenu_anchor: (Corner, Pixels),
 
+    /// If true, the menu will automatically dismiss when mouse leaves the menu area.
+    auto_dismiss_on_hover_out: bool,
+    /// Delay before auto-dismiss when mouse leaves the menu area.
+    auto_dismiss_delay: Duration,
+    /// Task for auto-dismiss delay
+    auto_dismiss_task: Option<Task<()>>,
+
     _subscriptions: Vec<Subscription>,
 }
 
@@ -313,6 +322,9 @@ impl PopupMenu {
             external_link_icon: true,
             size: Size::default(),
             submenu_anchor: (Corner::TopLeft, Pixels::ZERO),
+            auto_dismiss_on_hover_out: false,
+            auto_dismiss_delay: Duration::from_millis(300),
+            auto_dismiss_task: None,
             _subscriptions: vec![],
         }
     }
@@ -370,6 +382,25 @@ impl PopupMenu {
     /// Set the menu to show external link icon, default is true.
     pub fn external_link_icon(mut self, visible: bool) -> Self {
         self.external_link_icon = visible;
+        self
+    }
+
+    /// Set whether to auto-dismiss the menu when mouse leaves the menu area.
+    ///
+    /// When enabled, the menu will automatically close after a short delay (default 300ms)
+    /// when the mouse cursor moves outside the menu area.
+    ///
+    /// Default is `false`.
+    pub fn auto_dismiss_on_hover_out(mut self, enabled: bool) -> Self {
+        self.auto_dismiss_on_hover_out = enabled;
+        self
+    }
+
+    /// Set the delay before auto-dismiss when mouse leaves the menu area.
+    ///
+    /// Default is 300ms.
+    pub fn auto_dismiss_delay(mut self, delay: Duration) -> Self {
+        self.auto_dismiss_delay = delay;
         self
     }
 
@@ -928,6 +959,9 @@ impl PopupMenu {
             return;
         }
 
+        // Cancel any pending auto-dismiss task
+        self.auto_dismiss_task = None;
+
         cx.emit(DismissEvent);
 
         // Focus back to the previous focused handle.
@@ -944,6 +978,40 @@ impl PopupMenu {
             view.selected_index = None;
             view.dismiss(&Cancel, window, cx);
         });
+    }
+
+    /// Handle hover state change on the menu.
+    /// When mouse leaves the menu area, schedule auto-dismiss if enabled.
+    fn on_menu_hover(&mut self, hovered: bool, _window: &mut Window, cx: &mut Context<Self>) {
+        if !self.auto_dismiss_on_hover_out {
+            return;
+        }
+
+        if hovered {
+            // Mouse entered - cancel any pending auto-dismiss
+            self.auto_dismiss_task = None;
+        } else {
+            // Mouse left - schedule auto-dismiss after delay
+            // But only if no submenu is active (don't dismiss while navigating submenus)
+            if self.active_submenu().is_some() {
+                return;
+            }
+
+            let delay = self.auto_dismiss_delay;
+            self.auto_dismiss_task = Some(cx.spawn(async move |this, cx| {
+                Timer::after(delay).await;
+
+                let _ = this.update(cx, |view, cx| {
+                    // Double-check we still want to dismiss (no active submenu)
+                    if view.active_submenu().is_none() {
+                        // Cancel any pending auto-dismiss task
+                        view.auto_dismiss_task = None;
+                        // Emit DismissEvent to close the menu
+                        cx.emit(DismissEvent);
+                    }
+                });
+            }));
+        }
     }
 
     fn handle_dismiss(
@@ -1301,6 +1369,10 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::dismiss))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up_out))
             .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
+            // Auto-dismiss when mouse leaves the menu area (if enabled)
+            .on_hover(cx.listener(|this, hovered, window, cx| {
+                this.on_menu_hover(*hovered, window, cx);
+            }))
             .popover_style(cx)
             .text_color(cx.theme().popover_foreground)
             .relative()
