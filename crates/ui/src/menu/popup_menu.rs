@@ -10,10 +10,7 @@ use gpui::{
     ParentElement, Pixels, Render, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
     WeakEntity, Window, anchored, div, prelude::FluentBuilder, px, rems,
 };
-use gpui::{
-    ClickEvent, Half, MouseButton, MouseDownEvent, MouseUpEvent, OwnedMenuItem, Point, Subscription,
-    Task,
-};
+use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Point, Subscription, Task};
 use smol::Timer;
 use std::rc::Rc;
 use std::time::Duration;
@@ -1033,10 +1030,6 @@ impl PopupMenu {
         self.dismiss(&Cancel, window, cx);
     }
 
-    fn on_mouse_up_out(&mut self, e: &MouseUpEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.handle_dismiss(&e.position, window, cx);
-    }
-
     fn on_mouse_down_out(
         &mut self,
         e: &MouseDownEvent,
@@ -1368,7 +1361,6 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::confirm))
             .on_action(cx.listener(Self::dismiss))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up_out))
             .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
             // Auto-dismiss when mouse leaves the menu area (if enabled)
             .on_hover(cx.listener(|this, hovered, window, cx| {
