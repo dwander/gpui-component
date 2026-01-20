@@ -3,7 +3,6 @@ use gpui::{
     ParentElement, Pixels, Render, RenderOnce, StatefulInteractiveElement, StyleRefinement, Styled,
     Task, Window, div, prelude::FluentBuilder as _,
 };
-use smol::Timer;
 use std::rc::Rc;
 use std::time::Duration;
 

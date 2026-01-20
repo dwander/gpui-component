@@ -14,7 +14,6 @@ use gpui::{
     Position, ScrollHandle, ScrollWheelEvent, Size, Style, UniformListScrollHandle, Window, fill,
     point, px, relative, size,
 };
-use smol::Timer;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
