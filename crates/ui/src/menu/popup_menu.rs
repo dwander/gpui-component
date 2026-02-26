@@ -1083,7 +1083,7 @@ impl PopupMenu {
             Icon::empty()
         };
 
-        Some(icon.xsmall())
+        Some(icon.small())
     }
 
     #[inline]
@@ -1169,7 +1169,7 @@ impl PopupMenu {
                 h_flex()
                     .cursor_default()
                     .items_center()
-                    .gap_x_1()
+                    .gap_x_3()
                     .children(Self::render_icon(has_left_icon, false, None, window, cx))
                     .child(div().flex_1().child(label.clone())),
             ),
@@ -1190,7 +1190,7 @@ impl PopupMenu {
                         .flex_1()
                         .min_h(item_height)
                         .items_center()
-                        .gap_x_1()
+                        .gap_x_3()
                         .children(Self::render_icon(
                             has_left_icon,
                             is_left_check,
@@ -1220,7 +1220,7 @@ impl PopupMenu {
                 })
                 .disabled(*disabled)
                 .h(item_height)
-                .gap_x_1()
+                .gap_x_3()
                 .children(Self::render_icon(
                     has_left_icon,
                     is_left_check,
@@ -1231,7 +1231,7 @@ impl PopupMenu {
                 .child(
                     h_flex()
                         .w_full()
-                        .gap_3()
+                        .gap_6()
                         .items_center()
                         .justify_between()
                         .when(!show_link_icon, |this| this.child(label.clone()))
@@ -1267,7 +1267,7 @@ impl PopupMenu {
                         .min_h(item_height)
                         .size_full()
                         .items_center()
-                        .gap_x_1()
+                        .gap_x_3()
                         .children(Self::render_icon(
                             has_left_icon,
                             false,
@@ -1373,7 +1373,7 @@ impl Render for PopupMenu {
             .child(
                 v_flex()
                     .id("items")
-                    .p_1()
+                    .p_2()
                     .gap_y_0p5()
                     .min_w(rems(8.))
                     .when_some(self.min_width, |this, min_width| this.min_w(min_width))
