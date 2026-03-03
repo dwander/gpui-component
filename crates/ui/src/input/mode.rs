@@ -3,12 +3,11 @@ use std::{cell::RefCell, ops::Range};
 
 use gpui::{App, SharedString};
 use ropey::Rope;
-use tree_sitter::InputEdit;
 
-use super::text_wrapper::TextWrapper;
+use super::display_map::DisplayMap;
 use crate::highlighter::DiagnosticSet;
 use crate::highlighter::SyntaxHighlighter;
-use crate::input::{RopeExt as _, TabSize};
+use crate::input::{InputEdit, RopeExt as _, TabSize};
 
 #[derive(Clone)]
 pub(crate) enum InputMode {
@@ -33,6 +32,7 @@ pub(crate) enum InputMode {
         line_number: bool,
         language: SharedString,
         indent_guides: bool,
+        folding: bool,
         highlighter: Rc<RefCell<Option<SyntaxHighlighter>>>,
         diagnostics: DiagnosticSet,
     },
@@ -65,6 +65,7 @@ impl InputMode {
             highlighter: Rc::new(RefCell::new(None)),
             line_number: true,
             indent_guides: true,
+            folding: true,
             diagnostics: DiagnosticSet::new(&Rope::new()),
         }
     }
@@ -95,6 +96,23 @@ impl InputMode {
     #[inline]
     pub(super) fn is_code_editor(&self) -> bool {
         matches!(self, InputMode::CodeEditor { .. })
+    }
+
+    /// Return true if the mode is code editor and `folding: true`, `multi_line: true`.
+    #[inline]
+    pub(crate) fn is_folding(&self) -> bool {
+        if cfg!(target_family = "wasm") {
+            return false;
+        }
+
+        matches!(
+            self,
+            InputMode::CodeEditor {
+                folding: true,
+                multi_line: true,
+                ..
+            }
+        )
     }
 
     #[inline]
@@ -129,12 +147,12 @@ impl InputMode {
         }
     }
 
-    pub(super) fn update_auto_grow(&mut self, text_wrapper: &TextWrapper) {
+    pub(super) fn update_auto_grow(&mut self, display_map: &DisplayMap) {
         if self.is_single_line() {
             return;
         }
 
-        let wrapped_lines = text_wrapper.len();
+        let wrapped_lines = display_map.wrap_row_count();
         self.set_rows(wrapped_lines);
     }
 
@@ -175,7 +193,6 @@ impl InputMode {
     }
 
     /// Return false if the mode is not [`InputMode::CodeEditor`].
-    #[allow(unused)]
     #[inline]
     pub(super) fn line_number(&self) -> bool {
         match self {
@@ -260,6 +277,14 @@ impl InputMode {
             _ => None,
         }
     }
+
+    /// Get a reference to the highlighter (if available)
+    pub(super) fn highlighter(&self) -> Option<&Rc<RefCell<Option<SyntaxHighlighter>>>> {
+        match self {
+            InputMode::CodeEditor { highlighter, .. } => Some(highlighter),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -281,11 +306,13 @@ mod tests {
         assert_eq!(mode.has_indent_guides(), true);
         assert_eq!(mode.max_rows(), usize::MAX);
         assert_eq!(mode.min_rows(), 1);
+        assert_eq!(mode.is_folding(), true);
 
         let mode = InputMode::CodeEditor {
             multi_line: false,
             line_number: true,
             indent_guides: true,
+            folding: true,
             rows: 0,
             tab: Default::default(),
             language: "rust".into(),
@@ -299,6 +326,7 @@ mod tests {
         assert_eq!(mode.has_indent_guides(), false);
         assert_eq!(mode.max_rows(), 1);
         assert_eq!(mode.min_rows(), 1);
+        assert_eq!(mode.is_folding(), false);
     }
 
     #[test]
