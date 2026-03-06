@@ -458,13 +458,12 @@ impl RenderOnce for Button {
                         .tab_stop(self.tab_stop),
                 )
             })
-            .cursor_default()
+            .when(self.disabled, |this| this.cursor_default())
+            .when(!self.disabled, |this| this.cursor_pointer())
             .flex()
             .flex_shrink_0()
             .items_center()
             .justify_center()
-            .cursor_default()
-            .when(self.variant.is_link(), |this| this.cursor_pointer())
             .when(cx.theme().shadow && normal_style.shadow, |this| {
                 this.shadow_xs()
             })
