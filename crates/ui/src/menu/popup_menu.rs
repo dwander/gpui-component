@@ -276,6 +276,8 @@ pub struct PopupMenu {
     pub(crate) menu_items: Vec<PopupMenuItem>,
     /// The focus handle of Entity to handle actions.
     pub(crate) action_context: Option<FocusHandle>,
+    /// Optional key context name for key binding display (e.g., "PiCell").
+    pub(crate) action_context_name: Option<&'static str>,
     selected_index: Option<usize>,
     min_width: Option<Pixels>,
     max_width: Option<Pixels>,
@@ -307,6 +309,7 @@ impl PopupMenu {
         Self {
             focus_handle: cx.focus_handle(),
             action_context: None,
+            action_context_name: None,
             parent_menu: None,
             menu_items: Vec::new(),
             selected_index: None,
@@ -342,6 +345,15 @@ impl PopupMenu {
     /// Then the action will be dispatched to this handle.
     pub fn action_context(mut self, handle: FocusHandle) -> Self {
         self.action_context = Some(handle);
+        self
+    }
+
+    /// Set a key context name for resolving key bindings display.
+    ///
+    /// This is useful when the menu is opened from a context where the focus handle
+    /// may not carry the correct key context (e.g., dropdown menus in status bars).
+    pub fn action_context_name(mut self, name: &'static str) -> Self {
+        self.action_context_name = Some(name);
         self
     }
 
@@ -1053,8 +1065,8 @@ impl PopupMenu {
             .and_then(|handle| Kbd::binding_for_action_in(action.as_ref(), handle, window))
         {
             Some(kbd) => Some(kbd),
-            // Fallback to App level key binding
-            None => Kbd::binding_for_action(action.as_ref(), None, window),
+            // Fallback to context name if provided, then App level key binding
+            None => Kbd::binding_for_action(action.as_ref(), self.action_context_name, window),
         }
         .map(|this| {
             this.p_0()
