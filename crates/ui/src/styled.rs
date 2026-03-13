@@ -167,7 +167,8 @@ pub trait StyledExt: Styled + Sized {
                 spread_radius: px(-4.),
             },
         ]);
-        self.bg(cx.theme().popover)
+        self.backdrop_blur(px(20.))
+            .bg(cx.theme().popover.opacity(0.7))
             .text_color(cx.theme().popover_foreground)
             .border_1()
             .border_color(cx.theme().border)
