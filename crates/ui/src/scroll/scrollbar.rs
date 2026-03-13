@@ -108,7 +108,7 @@ impl ScrollbarHandle for ListState {
     }
 
     fn content_size(&self) -> Size<Pixels> {
-        (self.viewport_bounds().size + self.max_offset_for_scrollbar().into()).into()
+        self.viewport_bounds().size + self.max_offset_for_scrollbar().into()
     }
 
     fn start_drag(&self) {

@@ -636,11 +636,11 @@ struct ButtonVariantStyle {
 impl ButtonVariant {
     fn bg_color(&self, outline: bool, cx: &mut App) -> Hsla {
         if outline {
-            return cx.theme().background;
+            return cx.theme().input_background();
         }
 
         match self {
-            Self::Default => cx.theme().background,
+            Self::Default => cx.theme().input_background(),
             Self::Primary => cx.theme().primary,
             Self::Secondary => cx.theme().secondary,
             Self::Danger => cx.theme().danger.mix_oklab(cx.theme().transparent, 0.2),
@@ -675,7 +675,7 @@ impl ButtonVariant {
 
     fn border_color(&self, _bg: Hsla, outline: bool, cx: &mut App) -> Hsla {
         match self {
-            Self::Default => cx.theme().border,
+            Self::Default => cx.theme().input,
             Self::Secondary => cx.theme().border,
             Self::Primary => cx.theme().primary,
             Self::Danger => {
@@ -751,7 +751,7 @@ impl ButtonVariant {
 
     fn hovered(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().muted.opacity(0.7),
+            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.5),
             Self::Primary => {
                 if outline {
                     cx.theme().primary.mix_oklab(cx.theme().transparent, 0.2)
@@ -826,7 +826,7 @@ impl ButtonVariant {
 
     fn active(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().muted,
+            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.7),
             Self::Primary => {
                 if outline {
                     cx.theme().primary.mix_oklab(cx.theme().transparent, 0.4)
@@ -870,7 +870,7 @@ impl ButtonVariant {
 
     fn selected(&self, outline: bool, cx: &mut App) -> ButtonVariantStyle {
         let bg = match self {
-            Self::Default => cx.theme().muted,
+            Self::Default => cx.theme().input.mix_oklab(cx.theme().transparent, 0.7),
             Self::Primary => cx.theme().primary_active,
             Self::Secondary | Self::Ghost => cx.theme().secondary_active,
             Self::Danger => cx.theme().danger_active,
@@ -913,7 +913,15 @@ impl ButtonVariant {
         };
         let fg = cx.theme().muted_foreground.opacity(0.5);
         let (bg, border) = if outline {
-            (cx.theme().transparent, cx.theme().border.opacity(0.5))
+            (
+                cx.theme().input_background().opacity(0.5),
+                cx.theme().border.opacity(0.5),
+            )
+        } else if let Self::Default = self {
+            (
+                cx.theme().input_background().opacity(0.5),
+                cx.theme().input.opacity(0.5),
+            )
         } else {
             (bg, bg)
         };
