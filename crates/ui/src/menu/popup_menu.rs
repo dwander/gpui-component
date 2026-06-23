@@ -1173,7 +1173,7 @@ impl PopupMenu {
                 })
                 .disabled(*disabled)
                 .h(item_height)
-                .gap_x_1()
+                .gap_x(px(12.))
                 .children(Self::render_icon(
                     has_left_icon,
                     is_left_check,

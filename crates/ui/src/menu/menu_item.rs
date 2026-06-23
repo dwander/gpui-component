@@ -116,7 +116,8 @@ impl RenderOnce for MenuItemElement {
                 })
             })
             .when(self.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
+                // 비활성 항목은 muted 색 + 불투명도를 낮춰 텍스트·아이콘을 함께 어둡게 → 활성과 뚜렷이 구분.
+                this.text_color(cx.theme().muted_foreground).opacity(0.45)
             })
             .children(self.children)
     }
