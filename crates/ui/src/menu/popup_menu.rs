@@ -43,6 +43,8 @@ pub enum PopupMenuItem {
         action: Option<Box<dyn Action>>,
         // For link item
         handler: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
+        /// 클릭 후 메뉴를 닫지 않는다.
+        keep_open: bool,
     },
     /// A menu item with custom element render.
     ElementItem {
@@ -52,6 +54,8 @@ pub enum PopupMenuItem {
         action: Option<Box<dyn Action>>,
         render: Box<dyn Fn(&mut Window, &mut App) -> AnyElement + 'static>,
         handler: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
+        /// 클릭 후 메뉴를 닫지 않는다.
+        keep_open: bool,
     },
     /// A submenu item that opens another popup menu.
     ///
@@ -77,6 +81,7 @@ impl PopupMenuItem {
             action: None,
             is_link: false,
             handler: None,
+            keep_open: false,
         }
     }
 
@@ -94,6 +99,7 @@ impl PopupMenuItem {
             action: None,
             render: Box::new(move |window, cx| builder(window, cx).into_any_element()),
             handler: None,
+            keep_open: false,
         }
     }
 
@@ -209,6 +215,18 @@ impl PopupMenuItem {
         self
     }
 
+    /// 클릭 후 메뉴를 닫지 않는다. 토글 항목 등에 사용.
+    ///
+    /// Only works for [`PopupMenuItem::Item`] and [`PopupMenuItem::ElementItem`].
+    pub fn keep_open(mut self) -> Self {
+        match &mut self {
+            PopupMenuItem::Item { keep_open: k, .. } => *k = true,
+            PopupMenuItem::ElementItem { keep_open: k, .. } => *k = true,
+            _ => {}
+        }
+        self
+    }
+
     /// Create a link menu item.
     #[inline]
     pub fn link(label: impl Into<SharedString>, href: impl Into<String>) -> Self {
@@ -221,6 +239,7 @@ impl PopupMenuItem {
             action: None,
             is_link: true,
             handler: Some(Rc::new(move |_, _, cx| cx.open_url(&href))),
+            keep_open: false,
         }
     }
 
@@ -755,25 +774,30 @@ impl PopupMenu {
                 let item = self.menu_items.get(index);
                 match item {
                     Some(PopupMenuItem::Item {
-                        handler, action, ..
+                        handler, action, keep_open, ..
                     }) => {
+                        let keep = *keep_open;
                         if let Some(handler) = handler {
                             handler(&ClickEvent::default(), window, cx);
                         } else if let Some(action) = action.as_ref() {
                             self.dispatch_confirm_action(action, window, cx);
                         }
-
-                        self.dismiss(&Cancel, window, cx)
+                        if !keep {
+                            self.dismiss(&Cancel, window, cx)
+                        }
                     }
                     Some(PopupMenuItem::ElementItem {
-                        handler, action, ..
+                        handler, action, keep_open, ..
                     }) => {
+                        let keep = *keep_open;
                         if let Some(handler) = handler {
                             handler(&ClickEvent::default(), window, cx);
                         } else if let Some(action) = action.as_ref() {
                             self.dispatch_confirm_action(action, window, cx);
                         }
-                        self.dismiss(&Cancel, window, cx)
+                        if !keep {
+                            self.dismiss(&Cancel, window, cx)
+                        }
                     }
                     _ => {}
                 }
