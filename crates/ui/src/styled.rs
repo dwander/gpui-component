@@ -41,6 +41,28 @@ pub fn box_shadow(
     }
 }
 
+/// 검정 그림자 레이어 하나 — y 오프셋·blur·spread·alpha 로 생성.
+#[inline(always)]
+fn shadow_layer(y: f32, blur: f32, spread: f32, a: f32) -> BoxShadow {
+    box_shadow(0., y, blur, spread, gpui::hsla(0., 0., 0., a))
+}
+
+/// 팝업/드롭다운/메뉴 그림자 (gpui `shadow_md` 프로파일, 가변 alpha).
+pub fn popup_shadow_vec(alpha: f32) -> Vec<BoxShadow> {
+    vec![
+        shadow_layer(4., 6., -1., alpha),
+        shadow_layer(2., 4., -2., alpha),
+    ]
+}
+
+/// 다이얼로그/모달 그림자 (gpui `shadow_lg` 프로파일, 가변 alpha).
+pub fn dialog_shadow_vec(alpha: f32) -> Vec<BoxShadow> {
+    vec![
+        shadow_layer(10., 15., -3., alpha),
+        shadow_layer(4., 6., -4., alpha),
+    ]
+}
+
 macro_rules! font_weight {
     ($fn:ident, $const:ident) => {
         /// [docs](https://tailwindcss.com/docs/font-weight)
@@ -176,11 +198,12 @@ pub trait StyledExt: Styled + Sized {
     /// Set as Popover style
     #[inline]
     fn popover_style(self, cx: &App) -> Self {
+        let alpha = cx.theme().popup_shadow_alpha;
         self.bg(cx.theme().tokens.popover)
             .text_color(cx.theme().popover_foreground)
             .border_1()
             .border_color(cx.theme().border)
-            .shadow_lg()
+            .shadow(popup_shadow_vec(alpha))
             .rounded(cx.theme().radius)
     }
 

@@ -66,6 +66,14 @@ pub struct ThemeConfig {
     /// Set shadows in the theme, for example the Input and Button, default is true.
     #[serde(rename = "shadow")]
     pub shadow: Option<bool>,
+    /// Black alpha for popup/dropdown/menu shadows. Default 0.15 (gpui shadow_md level).
+    /// Dark themes should increase this (e.g. 0.9) for visibility on dark backgrounds.
+    #[serde(rename = "popup-shadow-alpha")]
+    pub popup_shadow_alpha: Option<f32>,
+    /// Black alpha for dialog/modal shadows. Default 0.15 (gpui shadow_lg level).
+    /// Dark themes should increase this (e.g. 0.9) for visibility on dark backgrounds.
+    #[serde(rename = "dialog-shadow-alpha")]
+    pub dialog_shadow_alpha: Option<f32>,
 
     /// The colors of the theme.
     pub colors: ThemeConfigColors,
@@ -921,6 +929,12 @@ impl Theme {
         }
         if let Some(shadow) = config.shadow {
             self.shadow = shadow;
+        }
+        if let Some(a) = config.popup_shadow_alpha {
+            self.popup_shadow_alpha = a;
+        }
+        if let Some(a) = config.dialog_shadow_alpha {
+            self.dialog_shadow_alpha = a;
         }
 
         self.tokens = self.colors.apply_config(&config, &default_colors);

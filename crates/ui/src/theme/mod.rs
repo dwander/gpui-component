@@ -70,6 +70,10 @@ pub struct Theme {
     /// Radius for the large elements, e.g.: Dialog, Notification border radius.
     pub radius_lg: Pixels,
     pub shadow: bool,
+    /// Black alpha for popup/dropdown shadows (0.0–1.0). Used by `popover_style()`.
+    pub popup_shadow_alpha: f32,
+    /// Black alpha for dialog/modal shadows (0.0–1.0). Used by app modal components.
+    pub dialog_shadow_alpha: f32,
     pub transparent: Hsla,
     /// Show the scrollbar mode, default: Scrolling
     pub scrollbar_show: ScrollbarShow,
@@ -224,6 +228,8 @@ impl From<&ThemeColor> for Theme {
             radius: px(6.),
             radius_lg: px(8.),
             shadow: true,
+            popup_shadow_alpha: 0.15,
+            dialog_shadow_alpha: 0.15,
             scrollbar_show: ScrollbarShow::default(),
             notification: NotificationSettings::default(),
             tile_grid_size: px(8.),
