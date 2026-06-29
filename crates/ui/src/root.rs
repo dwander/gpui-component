@@ -436,6 +436,24 @@ impl Root {
         Some(root.read(cx).tooltip_overlay.clone())
     }
 
+    /// 현재 창의 툴팁을 억제한다 — 현재 표시 중인 툴팁을 즉시 없애고, 이후
+    /// hover 이벤트로 인한 새 show-타이머가 시작되지 않도록 막는다.
+    /// OS 전환(전체화면 등)으로 트리거 요소가 사라질 때 호출한다.
+    /// 반드시 [`restore_tooltip`]으로 해제해야 이후 툴팁이 다시 동작한다.
+    pub fn suppress_tooltip(window: &Window, cx: &mut App) {
+        if let Some(overlay) = Self::tooltip_overlay(window, cx) {
+            overlay.update(cx, |o, cx| o.suppress(cx));
+        }
+    }
+
+    /// [`suppress_tooltip`]으로 걸었던 툴팁 억제를 해제한다.
+    /// OS 전환이 끝나 정상 레이아웃으로 돌아올 때 호출한다.
+    pub fn restore_tooltip(window: &Window, cx: &mut App) {
+        if let Some(overlay) = Self::tooltip_overlay(window, cx) {
+            overlay.update(cx, |o, _cx| o.restore());
+        }
+    }
+
     /// Get the fallback native-menu overlay entity for this window.
     pub(crate) fn native_menu_overlay(
         window: &Window,

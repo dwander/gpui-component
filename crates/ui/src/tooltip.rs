@@ -367,6 +367,10 @@ pub struct TooltipOverlay {
     had_recent_tooltip: bool,
     animation_epoch: usize,
     is_switching: bool,
+    /// true 동안 request_show 가 no-op이 된다. 전체화면 전환처럼 트리거 요소가
+    /// 곧 사라지는 상황에서 OS 전환 중 발생하는 hover 이벤트로 새 타이머가
+    /// 시작되지 않도록 막는다.
+    suppressed: bool,
 
     _show_task: Option<Task<()>>,
     _hide_task: Option<Task<()>>,
@@ -381,6 +385,7 @@ impl TooltipOverlay {
             had_recent_tooltip: false,
             animation_epoch: 0,
             is_switching: false,
+            suppressed: false,
             _show_task: None,
             _hide_task: None,
         }
@@ -391,6 +396,20 @@ impl TooltipOverlay {
         self.epoch
     }
 
+    /// 툴팁 표시를 억제한다. 현재 표시 중인 툴팁과 인플라이트 타이머를 즉시 클리어하고,
+    /// 이후 [`request_show`] 호출을 모두 무시한다. [`restore`]로 해제한다.
+    pub fn suppress(&mut self, cx: &mut Context<Self>) {
+        self.suppressed = true;
+        if self.clear_state() {
+            cx.notify();
+        }
+    }
+
+    /// [`suppress`]로 걸었던 억제를 해제한다. 이후 hover 이벤트로 툴팁이 다시 뜬다.
+    pub fn restore(&mut self) {
+        self.suppressed = false;
+    }
+
     /// Request showing a tooltip. If another tooltip is active or was recently
     /// hidden, shows immediately with a slide animation. Otherwise starts a delay.
     pub(crate) fn request_show(
@@ -399,6 +418,9 @@ impl TooltipOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.suppressed {
+            return;
+        }
         // Cancel any pending hide
         self._hide_task = None;
 
@@ -461,7 +483,7 @@ impl TooltipOverlay {
         }));
     }
 
-    pub(crate) fn hide(&mut self, cx: &mut Context<Self>) {
+    pub fn hide(&mut self, cx: &mut Context<Self>) {
         if self.clear_state() {
             cx.notify();
         }
@@ -481,6 +503,9 @@ impl TooltipOverlay {
         self.is_switching = false;
         self._show_task = None;
         self._hide_task = None;
+        // Task 핸들을 드랍해도 GPUI 비동기 타이머는 실제로 취소되지 않는다.
+        // epoch를 올려 인플라이트 타이머가 발화해도 epoch 불일치로 무시되게 한다.
+        self.epoch += 1;
 
         changed
     }
