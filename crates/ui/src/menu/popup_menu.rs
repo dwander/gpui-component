@@ -1242,9 +1242,11 @@ impl PopupMenu {
                 .child(
                     h_flex()
                         .min_h(item_height)
+                        // 일반 항목(`Item`)의 아이콘↔라벨 간격과 동일하게 맞춘다 — 서브메뉴만 gap_x_1(4px)이라
+                        // 라벨이 왼쪽으로 치우쳐 다른 항목과 어긋나던 것 정렬.
                         .size_full()
                         .items_center()
-                        .gap_x_1()
+                        .gap_x(px(12.))
                         .children(Self::render_icon(
                             has_left_icon,
                             false,
