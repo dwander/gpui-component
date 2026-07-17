@@ -290,30 +290,6 @@ impl VirtualList {
         scroll_offset
     }
 
-    /// Ref from: https://github.com/zed-industries/zed/blob/83f9f9d9e3f5914392cab9a09e3472711a1d7b38/crates/gpui/src/elements/uniform_list.rs#L660
-    fn measure_item(
-        &self,
-        list_width: Option<Pixels>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Size<Pixels> {
-        if self.items_count == 0 {
-            return Size::default();
-        }
-
-        let item_ix = 0;
-        let mut items = (self.render_items)(item_ix..item_ix + 1, window, cx);
-        let Some(mut item_to_measure) = items.pop() else {
-            return Size::default();
-        };
-        let available_space = size(
-            list_width.map_or(AvailableSpace::MinContent, |width| {
-                AvailableSpace::Definite(width)
-            }),
-            AvailableSpace::MinContent,
-        );
-        item_to_measure.layout_as_root(available_space, window, cx)
-    }
 }
 
 /// Frame state used by the [VirtualItem].
@@ -362,7 +338,6 @@ impl Element for VirtualList {
         let rem_size = window.rem_size();
         let font_size = window.text_style().font_size.to_pixels(rem_size);
         let mut size_layout = ItemSizeLayout::default();
-        let longest_item_size = self.measure_item(None, window, cx);
 
         let layout_id = self.base.interactivity().request_layout(
             global_id,
@@ -370,6 +345,31 @@ impl Element for VirtualList {
             window,
             cx,
             |style, window, cx| {
+                // Measure the first item only when the item sizes changed — the measured size is
+                // only consumed inside the sizes-changed branch below, so re-rendering a whole
+                // item (e.g. a full grid row) every layout pass was wasted work on large lists.
+                // Ref from: https://github.com/zed-industries/zed/blob/83f9f9d9e3f5914392cab9a09e3472711a1d7b38/crates/gpui/src/elements/uniform_list.rs#L660
+                let sizes_changed = window.with_element_state(
+                    global_id.unwrap(),
+                    |state: Option<ItemSizeLayout>, _window| {
+                        let state = state.unwrap_or_default();
+                        (state.items_sizes != self.item_sizes, state)
+                    },
+                );
+                let longest_item_size = if sizes_changed && self.items_count > 0 {
+                    let mut items = (self.render_items)(0..1, window, cx);
+                    match items.pop() {
+                        Some(mut item_to_measure) => {
+                            let available_space =
+                                size(AvailableSpace::MinContent, AvailableSpace::MinContent);
+                            item_to_measure.layout_as_root(available_space, window, cx)
+                        }
+                        None => Size::default(),
+                    }
+                } else {
+                    Size::default()
+                };
+
                 size_layout = window.with_element_state(
                     global_id.unwrap(),
                     |state: Option<ItemSizeLayout>, _window| {
