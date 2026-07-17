@@ -2,9 +2,9 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use gpui::{
     Anchor, Animation, AnimationExt as _, AnyElement, App, Background, Bounds, Div, Edges,
-    ElementId, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce, ScrollHandle,
-    SharedString, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px,
+    ElementId, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce, Role,
+    ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled,
+    Window, div, prelude::FluentBuilder as _, px,
 };
 use rust_i18n::t;
 use smallvec::SmallVec;
@@ -416,6 +416,7 @@ impl RenderOnce for TabBar {
         let on_click = self.on_click.clone();
 
         self.base
+            .role(Role::TabList)
             .group("tab-bar")
             .relative()
             .flex()
@@ -483,6 +484,7 @@ impl RenderOnce for TabBar {
                             if let Some(ref rc) = bounds_rc {
                                 let rc = rc.clone();
                                 div()
+                                    .flex_shrink_0()
                                     .on_prepaint(move |bounds, _, _| {
                                         if let Some(slot) = rc.borrow_mut().tabs.get_mut(ix) {
                                             *slot = bounds;
