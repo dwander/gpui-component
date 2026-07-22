@@ -302,10 +302,12 @@ impl Render for Notification {
             .map(|builder| builder(self, window, cx).small().mr_3p5());
 
         let closing = self.closing;
+        // 아이콘을 크게(24px) — 썸네일 패널 등 톤이 비슷한 배경 위에서도 눈에 띄게.
         let icon = match self.type_ {
             None => self.icon.clone(),
             Some(type_) => Some(type_.icon(cx)),
-        };
+        }
+        .map(|icon| icon.large());
         let has_icon = icon.is_some();
         let placement = cx.theme().notification.placement;
 
@@ -319,19 +321,20 @@ impl Render for Notification {
             .border_color(cx.theme().border)
             .bg(cx.theme().tokens.popover)
             .rounded(cx.theme().radius_lg)
-            .shadow_md()
+            // 다이얼로그/모달과 동일한 그림자 — 톤이 비슷한 패널 위에서도 확실히 떠 보이게.
+            .shadow(crate::dialog_shadow_vec(cx.theme().dialog_shadow_alpha))
             .py_3p5()
             .px_4()
             .gap_3()
             .refine_style(&self.style)
             .when_some(icon, |this, icon| {
-                this.child(div().absolute().top(px(18.)).left_4().child(icon))
+                this.child(div().absolute().top(px(14.)).left_4().child(icon))
             })
             .child(
                 v_flex()
                     .flex_1()
                     .overflow_hidden()
-                    .when(has_icon, |this| this.pl_6())
+                    .when(has_icon, |this| this.pl_8())
                     .when_some(self.title.clone(), |this, title| {
                         this.child(div().text_sm().font_semibold().child(title))
                     })
