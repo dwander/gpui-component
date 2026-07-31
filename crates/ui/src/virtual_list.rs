@@ -124,8 +124,9 @@ impl VirtualListScrollHandle {
 ///
 /// This is like `uniform_list` in GPUI, but support two axis.
 ///
-/// The `item_sizes` is the size of each column,
-/// only the `height` is used, `width` is ignored and VirtualList will measure the first item width.
+/// The `item_sizes` is the size of each row. Only the `height` is used; `width` is inferred
+/// by measuring the item selected with [`VirtualList::with_item_to_measure_index`], defaulting
+/// to the first item.
 ///
 /// See also [`h_virtual_list`]
 #[inline]
@@ -144,8 +145,9 @@ where
 
 /// Create a [`VirtualList`] in horizontal direction.
 ///
-/// The `item_sizes` is the size of each column,
-/// only the `width` is used, `height` is ignored and VirtualList will measure the first item height.
+/// The `item_sizes` is the size of each column. Only the `width` is used; `height` is inferred
+/// by measuring the item selected with [`VirtualList::with_item_to_measure_index`], defaulting
+/// to the first item.
 ///
 /// See also [`v_virtual_list`]
 #[inline]
@@ -197,6 +199,7 @@ where
         item_sizes,
         render_items: Box::new(render_range),
         sizing_behavior: ListSizingBehavior::default(),
+        item_to_measure_index: 0,
     }
 }
 
@@ -212,6 +215,7 @@ pub struct VirtualList {
         dyn for<'a> Fn(Range<usize>, &'a mut Window, &'a mut App) -> SmallVec<[AnyElement; 64]>,
     >,
     sizing_behavior: ListSizingBehavior,
+    item_to_measure_index: usize,
 }
 
 impl Styled for VirtualList {
@@ -230,6 +234,12 @@ impl VirtualList {
     /// Set the sizing behavior for the list.
     pub fn with_sizing_behavior(mut self, behavior: ListSizingBehavior) -> Self {
         self.sizing_behavior = behavior;
+        self
+    }
+
+    /// Set the item index used to infer the list's cross-axis size.
+    pub fn with_item_to_measure_index(mut self, index: usize) -> Self {
+        self.item_to_measure_index = index;
         self
     }
 
@@ -302,6 +312,8 @@ pub struct VirtualListFrameState {
 #[derive(Default, Clone)]
 pub struct ItemSizeLayout {
     items_sizes: Rc<Vec<Size<Pixels>>>,
+    /// Item index the cached cross-axis `content_size` was measured from, if measured at all.
+    measured_item_ix: Option<usize>,
     content_size: Size<Pixels>,
     sizes: Vec<Pixels>,
     origins: Vec<Pixels>,
@@ -345,30 +357,35 @@ impl Element for VirtualList {
             window,
             cx,
             |style, window, cx| {
-                // Measure the first item only when the item sizes changed — the measured size is
-                // only consumed inside the sizes-changed branch below, so re-rendering a whole
-                // item (e.g. a full grid row) every layout pass was wasted work on large lists.
-                // Ref from: https://github.com/zed-industries/zed/blob/83f9f9d9e3f5914392cab9a09e3472711a1d7b38/crates/gpui/src/elements/uniform_list.rs#L660
-                let sizes_changed = window.with_element_state(
+                // Measure the sizing item only when something that affects it changed — measuring
+                // re-renders a whole item (e.g. a full grid row), which was wasted work on every
+                // layout pass for large lists. The cross-axis size stays cached in the element
+                // state below, so a skipped measure must leave it untouched instead of zeroing it.
+                let needs_measure = window.with_element_state(
                     global_id.unwrap(),
                     |state: Option<ItemSizeLayout>, _window| {
                         let state = state.unwrap_or_default();
-                        (state.items_sizes != self.item_sizes, state)
+                        let needs_measure = state.items_sizes != self.item_sizes
+                            || state.measured_item_ix != Some(self.item_to_measure_index);
+                        (needs_measure, state)
                     },
                 );
-                let longest_item_size = if sizes_changed && self.items_count > 0 {
-                    let mut items = (self.render_items)(0..1, window, cx);
-                    match items.pop() {
-                        Some(mut item_to_measure) => {
-                            let available_space =
-                                size(AvailableSpace::MinContent, AvailableSpace::MinContent);
-                            item_to_measure.layout_as_root(available_space, window, cx)
-                        }
-                        None => Size::default(),
+                // Inlined rather than a `&self` helper: the closure runs inside the
+                // `self.base.interactivity()` mutable borrow, so only disjoint field captures work.
+                // Ref from: https://github.com/zed-industries/zed/blob/83f9f9d9e3f5914392cab9a09e3472711a1d7b38/crates/gpui/src/elements/uniform_list.rs#L660
+                let longest_item_size = needs_measure.then(|| {
+                    if self.items_count == 0 {
+                        return Size::default();
                     }
-                } else {
-                    Size::default()
-                };
+                    let item_ix = self.item_to_measure_index.min(self.items_count - 1);
+                    let mut items = (self.render_items)(item_ix..item_ix + 1, window, cx);
+                    let Some(mut item_to_measure) = items.pop() else {
+                        return Size::default();
+                    };
+                    let available_space =
+                        size(AvailableSpace::MinContent, AvailableSpace::MinContent);
+                    item_to_measure.layout_as_root(available_space, window, cx)
+                });
 
                 size_layout = window.with_element_state(
                     global_id.unwrap(),
@@ -416,25 +433,22 @@ impl Element for VirtualList {
                                 })
                                 .collect::<Vec<_>>();
 
-                            state.content_size = if self.axis.is_horizontal() {
-                                Size {
-                                    width: px(state
-                                        .sizes
-                                        .iter()
-                                        .map(|size| size.as_f32())
-                                        .sum::<f32>()),
-                                    height: longest_item_size.height,
-                                }
+                            if self.axis.is_horizontal() {
+                                state.content_size.width =
+                                    px(state.sizes.iter().map(|size| size.as_f32()).sum::<f32>());
                             } else {
-                                Size {
-                                    width: longest_item_size.width,
-                                    height: px(state
-                                        .sizes
-                                        .iter()
-                                        .map(|size| size.as_f32())
-                                        .sum::<f32>()),
-                                }
-                            };
+                                state.content_size.height =
+                                    px(state.sizes.iter().map(|size| size.as_f32()).sum::<f32>());
+                            }
+                        }
+
+                        if let Some(longest_item_size) = longest_item_size {
+                            state.measured_item_ix = Some(self.item_to_measure_index);
+                            if self.axis.is_horizontal() {
+                                state.content_size.height = longest_item_size.height;
+                            } else {
+                                state.content_size.width = longest_item_size.width;
+                            }
                         }
 
                         (state.clone(), state)
