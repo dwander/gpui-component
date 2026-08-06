@@ -838,7 +838,13 @@ impl ButtonVariant {
         match self {
             Self::Default => cx.theme().input,
             Self::Secondary => cx.theme().border,
-            Self::Primary => cx.theme().primary,
+            Self::Primary => {
+                if outline {
+                    cx.theme().primary.mix_oklab(transparent_white(), 0.4)
+                } else {
+                    cx.theme().primary
+                }
+            }
             Self::Danger => {
                 if outline {
                     cx.theme().danger.mix_oklab(transparent_white(), 0.4)
