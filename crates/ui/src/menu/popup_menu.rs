@@ -15,6 +15,10 @@ use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Point, Subscription}
 use std::rc::Rc;
 
 const CONTEXT: &str = "PopupMenu";
+/// 메뉴 배경 불투명도 — 뒤를 블러가 눌러주므로 살짝 비치게 둔다.
+const MENU_BG_ALPHA: f32 = 0.72;
+/// 메뉴 뒤 배경을 흐리는 반경(px).
+const MENU_BLUR: f32 = 16.0;
 
 pub fn init(cx: &mut App) {
     cx.bind_keys([
@@ -1463,6 +1467,10 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::dismiss))
             .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
             .popover_style(cx)
+            // 반투명 배경 + 뒤 블러 (프로스티드) — 앱의 팝오버/드롭다운과 톤을 맞춘다.
+            // popover_style 이 불투명 bg 를 깔아두므로 여기서 덮어쓴다.
+            .bg(cx.theme().tokens.popover.opacity(MENU_BG_ALPHA))
+            .backdrop_blur(px(MENU_BLUR))
             .text_color(cx.theme().popover_foreground)
             .relative()
             .occlude()

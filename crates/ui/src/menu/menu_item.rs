@@ -6,6 +6,10 @@ use gpui::{
 };
 use smallvec::SmallVec;
 
+/// 항목 호버/선택 막대 불투명도 — 불투명하면 반투명 메뉴 표면 위에 불투명 띠가 얹혀
+/// 블러가 그 줄에서만 끊겨 보인다. (popup_menu.rs 의 MENU_BG_ALPHA 와 짝)
+const ITEM_HIGHLIGHT_ALPHA: f32 = 0.55;
+
 #[derive(IntoElement)]
 pub(crate) struct MenuItemElement {
     id: ElementId,
@@ -112,11 +116,13 @@ impl RenderOnce for MenuItemElement {
             })
             .when(!self.disabled, |this| {
                 this.group_hover(self.group_name, |this| {
-                    this.bg(cx.theme().tokens.accent)
+                    // 메뉴 표면이 반투명이라 호버/선택 막대도 비쳐야 블러와 어우러진다.
+                    this.bg(cx.theme().tokens.accent.opacity(ITEM_HIGHLIGHT_ALPHA))
                         .text_color(cx.theme().accent_foreground)
                 })
                 .when(self.selected, |this| {
-                    this.bg(cx.theme().tokens.accent)
+                    // 메뉴 표면이 반투명이라 호버/선택 막대도 비쳐야 블러와 어우러진다.
+                    this.bg(cx.theme().tokens.accent.opacity(ITEM_HIGHLIGHT_ALPHA))
                         .text_color(cx.theme().accent_foreground)
                 })
                 .when_some(self.on_click, |this, on_click| {
