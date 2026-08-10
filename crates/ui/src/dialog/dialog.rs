@@ -22,6 +22,12 @@ use crate::{
 
 pub static ANIMATION_DURATION: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs_f64(0.25));
 const CONTEXT: &str = "Dialog";
+/// 다이얼로그 배경 불투명도 — 뒤를 블러가 눌러주므로 살짝 비치게 둔다.
+const DIALOG_BG_ALPHA: f32 = 0.72;
+/// 다이얼로그 뒤 배경을 흐리는 반경(px).
+const DIALOG_BLUR: f32 = 16.0;
+/// 등장 시작 시점의 가로 배율 (1.0 = 최종 크기).
+const DIALOG_SCALE_FROM: f32 = 0.92;
 
 actions!(dialog, [CancelDialog, ConfirmDialog]);
 
@@ -468,6 +474,7 @@ impl RenderOnce for Dialog {
         let offset_top = px(layer_ix as f32 * 16.);
         let y = self.props.margin_top.unwrap_or(view_size.height / 10.) + offset_top;
         let x = bounds.center().x - self.props.width / 2.;
+        let width = self.props.width;
 
         let base_size = window.text_style().font_size;
         let rem_size = window.rem_size();
@@ -534,7 +541,9 @@ impl RenderOnce for Dialog {
                             .role(self.a11y_role)
                             .track_focus(&self.focus_handle)
                             .focus_trap(format!("dialog-{}", layer_ix), &self.focus_handle)
-                            .bg(cx.theme().tokens.background)
+                            // 반투명 + 뒤 블러 (프로스티드) — 메뉴/팝오버와 톤을 맞춘다.
+                            .bg(cx.theme().tokens.background.opacity(DIALOG_BG_ALPHA))
+                            .backdrop_blur(px(DIALOG_BLUR))
                             .border_1()
                             .border_color(cx.theme().border)
                             .rounded(cx.theme().radius_lg)
@@ -649,7 +658,7 @@ impl RenderOnce for Dialog {
                                         }
                                     })
                             }))
-                            .with_animation("slide-down", animation.clone(), move |this, delta| {
+                            .with_animation("scale-in", animation.clone(), move |this, delta| {
                                 // This is equivalent to `shadow_xl` with an extra opacity.
                                 let shadow = vec![
                                     BoxShadow {
@@ -667,7 +676,15 @@ impl RenderOnce for Dialog {
                                         inset: false,
                                     },
                                 ];
-                                this.top(y * delta).shadow(shadow)
+                                // 위에서 내려오는 대신 살짝 커지며 나타난다. gpui 에는 요소
+                                // 스케일 변형이 없어 실제 확대가 아니라 폭 보간이다(메뉴와 동일).
+                                //
+                                // 바깥의 left(x) 는 **최종 폭** 기준으로 잡힌 값이라, 폭만 줄이면
+                                // 왼쪽 모서리가 박힌 채 오른쪽으로만 자란다. 줄어든 만큼 절반을
+                                // 오른쪽으로 밀어 가운데에서 퍼지게 한다.
+                                let w =
+                                    width * (DIALOG_SCALE_FROM + (1. - DIALOG_SCALE_FROM) * delta);
+                                this.left(x + (width - w) / 2.).w(w).shadow(shadow)
                             })
                             .selection_scope(SelectionScope::Dialog(layer_ix)),
                     )
