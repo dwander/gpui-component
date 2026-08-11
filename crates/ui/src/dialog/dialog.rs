@@ -676,15 +676,14 @@ impl RenderOnce for Dialog {
                                         inset: false,
                                     },
                                 ];
-                                // 위에서 내려오는 대신 살짝 커지며 나타난다. gpui 에는 요소
-                                // 스케일 변형이 없어 실제 확대가 아니라 폭 보간이다(메뉴와 동일).
+                                // 위에서 내려오는 대신 살짝 커지며 나타난다 (메뉴와 동일).
+                                // `appear_scale` 은 레이아웃이 아니라 렌더 결과를 중심 기준으로
+                                // 확대하므로 폭·위치 보정이 필요 없다.
                                 //
-                                // 바깥의 left(x) 는 **최종 폭** 기준으로 잡힌 값이라, 폭만 줄이면
-                                // 왼쪽 모서리가 박힌 채 오른쪽으로만 자란다. 줄어든 만큼 절반을
-                                // 오른쪽으로 밀어 가운데에서 퍼지게 한다.
-                                let w =
-                                    width * (DIALOG_SCALE_FROM + (1. - DIALOG_SCALE_FROM) * delta);
-                                this.left(x + (width - w) / 2.).w(w).shadow(shadow)
+                                // delta=1 에서 정확히 1.0 이 나오는 형태로 쓴다 — 미세하게
+                                // 어긋나면 다 뜬 대화상자가 계속 오프스크린 격리를 거친다.
+                                let scale = 1. - (1. - DIALOG_SCALE_FROM) * (1. - delta);
+                                this.left(x).w(width).appear_scale(scale).shadow(shadow)
                             })
                             .selection_scope(SelectionScope::Dialog(layer_ix)),
                     )
