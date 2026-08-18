@@ -1,20 +1,48 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::ThemeStyled as _;
 use crate::{
-    ActiveTheme, Colorize as _, Disableable, Icon, RoleOverride, Selectable, Sizable, Size,
-    StyleSized, StyledExt,
+    ActiveTheme, Colorize as _, Disableable, ElementExt as _, Icon, RoleOverride, Selectable,
+    Sizable, Size, StyleSized, StyledExt,
     button::ButtonIcon,
     h_flex,
     select::Caret,
     tooltip::{ManagedTooltipExt as _, Tooltip},
 };
 use gpui::{
-    AnyElement, App, Background, ClickEvent, Corners, Edges, ElementId, Hsla, InteractiveElement,
-    Interactivity, IntoElement, MouseButton, ParentElement, Pixels, RenderOnce, Role, SharedString,
+    Action, AnyElement, App, Background, Bounds, ClickEvent, Corners, Edges, ElementId, Hsla,
+    InteractiveElement, Interactivity, IntoElement, KeyBinding, KeyboardButton, KeyboardClickEvent,
+    MouseButton, ParentElement, Pixels, RenderOnce, Role, SharedString,
     StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
     prelude::FluentBuilder as _, relative, transparent_white,
 };
+use serde::Deserialize;
+
+/// 포커스를 가진 버튼이 자기 Enter/Space 를 갖는 키 컨텍스트.
+const CONTEXT: &str = "Button";
+
+/// 포커스된 버튼을 키보드로 누른다 (`space` = 스페이스바로 눌렀는지).
+///
+/// ⚠ 이 액션이 왜 필요한가 — gpui 는 포커스된 요소에서 Enter/Space 를 **키업의 합성 클릭**
+/// (저수준 키 리스너)으로 처리하는데, `dispatch_key_event` 는 **키바인딩을 저수준 리스너보다
+/// 먼저** 돌린다. 그래서 조상이 같은 키를 바인딩해 두면(다이얼로그의 `enter` → `Confirm` 등)
+/// 그쪽이 먼저 이벤트를 먹고 버튼의 키업은 오지도 않는다 — 취소 버튼에 포커스를 두고 Enter 를
+/// 눌렀는데 확인이 실행되는 식이다. 버튼이 더 깊은 컨텍스트에서 같은 키를 바인딩해 두면
+/// 그 자리에서 이긴다.
+#[derive(Clone, Action, PartialEq, Eq, Deserialize)]
+#[action(namespace = ui, no_json)]
+pub struct ActivateButton {
+    /// 스페이스바로 눌렀으면 true, Enter 면 false.
+    pub space: bool,
+}
+
+pub fn init(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("enter", ActivateButton { space: false }, Some(CONTEXT)),
+        KeyBinding::new("space", ActivateButton { space: true }, Some(CONTEXT)),
+    ]);
+}
 
 #[derive(Default, Clone, Copy)]
 pub enum ButtonRounded {
@@ -491,6 +519,8 @@ impl RenderOnce for Button {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let style: ButtonVariant = self.variant;
         let interactive = self.interactive();
+        // 키보드 활성화(ActivateButton)와 클릭 리스너가 같은 핸들러를 공유한다.
+        let keyboard_click = self.on_click.clone();
         let hoverable = self.hoverable();
         let disabled = self.disabled;
         let loading = self.loading;
@@ -728,6 +758,42 @@ impl RenderOnce for Button {
             } else {
                 this
             }
+        })
+        // 포커스를 가진 동안만 Enter/Space 를 자기 것으로 가져간다 ([`ActivateButton`] 참고).
+        // 포커스가 없는 버튼에는 컨텍스트도 액션도 붙이지 않으므로, 창에 버튼이 몇 개든
+        // 비용은 항상 "포커스된 하나" 뿐이다.
+        .when(is_focused, |this| {
+            // 합성 클릭의 위치(`ClickEvent::position` = 히트박스 좌하단)를 위해 이 프레임의
+            // 배치 결과를 담아 둔다 — 버튼에서 메뉴를 여는 호출부가 이 좌표를 쓴다.
+            // 액션 리스너는 **직전에 그려진 프레임**의 것이 불리므로, 같은 프레임 prepaint 가
+            // 채워 넣은 값을 읽게 된다.
+            let bounds: Rc<Cell<Bounds<Pixels>>> = Rc::new(Cell::new(Bounds::default()));
+            let painted = bounds.clone();
+            let on_click = keyboard_click.clone();
+            this.key_context(CONTEXT)
+                .on_prepaint(move |b, _, _| painted.set(b))
+                .on_action(move |action: &ActivateButton, window, cx| {
+                    // 눌리지 않는 상태(비활성·로딩)여도 이벤트는 여기서 끝낸다 — 그냥 흘려보내면
+                    // 조상 바인딩(다이얼로그 Confirm 등)이 대신 발동해 버린다.
+                    if !interactive {
+                        return;
+                    }
+                    let Some(on_click) = on_click.as_ref() else {
+                        return;
+                    };
+                    on_click(
+                        &ClickEvent::Keyboard(KeyboardClickEvent {
+                            button: if action.space {
+                                KeyboardButton::Space
+                            } else {
+                                KeyboardButton::Enter
+                            },
+                            bounds: bounds.get(),
+                        }),
+                        window,
+                        cx,
+                    );
+                })
         })
         // 버튼은 테마 스위치와 무관하게 링을 그린다 — 스위치가 떨어뜨리는 "테두리 물들이기"
         // 는 물들일 테두리가 있어야 하는데, 채움 변형(Primary·Danger…)은 테두리를 아예
