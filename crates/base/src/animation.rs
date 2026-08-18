@@ -86,6 +86,33 @@ pub fn ease_in_out_cubic(t: f32) -> f32 {
     }
 }
 
+/// 스프링이 정착할 때까지 걸리는 오차(정규화 값 기준).
+const SPRING_EPSILON: f32 = 0.001;
+
+/// SwiftUI 식 (응답 시간, 감쇠비) 로 기술한 스프링을, 지속 시간 + 이징 함수 쌍으로 바꾼다.
+///
+/// `response` 는 스프링이 한 번 왕복하는 데 걸리는 시간(초), `damping_ratio` 는 1.0 이
+/// 임계 감쇠(지나침 없음)이고 1.0 미만이면 목표를 지나쳤다 돌아온다(바운스). 질량 1 기준으로
+/// ω₀ = 2π/response, k = ω₀²m, c = 2ζ√(km) 이다 — 강성 숫자를 손으로 고르는 것보다
+/// "얼마나 빠르고 얼마나 통통한가"로 말하는 편이 조율하기 쉽다.
+///
+/// 반환한 이징은 [`gpui::Animation::with_easing`] 에 그대로 넣으면 되고, 함께 돌려주는
+/// 지속 시간은 그 스프링이 실제로 잦아드는 데 걸리는 시간이다 — 오버슈트가 잘려 보이지
+/// 않으려면 이 값을 써야 한다.
+///
+/// ⚠ ζ < 1 이면 이징 출력이 도중에 **1.0 을 넘는다**(그게 바운스다). 알파처럼 0..1 을
+/// 벗어나면 안 되는 값에 쓸 때는 받는 쪽에서 클램프할 것.
+pub fn spring_easing(response: f32, damping_ratio: f32) -> (Duration, impl Fn(f32) -> f32) {
+    let natural_frequency = std::f32::consts::TAU / response;
+    let mass = 1.0;
+    let stiffness = natural_frequency * natural_frequency * mass;
+    let damping = 2.0 * damping_ratio * (stiffness * mass).sqrt();
+    gpui::sampled_easing(
+        gpui::SpringConfig::new(stiffness, damping, mass),
+        SPRING_EPSILON,
+    )
+}
+
 // ── Lerp trait ──────────────────────────────────────────────────────────────
 
 /// Trait for types that support linear interpolation.

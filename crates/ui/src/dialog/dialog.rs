@@ -11,7 +11,7 @@ use rust_i18n::t;
 
 use crate::{
     ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, WindowExt as _,
-    animation::cubic_bezier,
+    animation::{cubic_bezier, spring_easing},
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogContent, DialogTitle},
     scroll::ScrollableElement as _,
@@ -27,6 +27,15 @@ const DIALOG_BG_ALPHA: f32 = 0.72;
 const DIALOG_BLUR: f32 = 16.0;
 /// 등장 시작 시점의 배율 (1.0 = 최종 크기).
 const DIALOG_SCALE_FROM: f32 = 0.92;
+/// 등장 스프링의 응답 시간(초) — 한 번 왕복하는 데 걸리는 시간.
+const DIALOG_SPRING_RESPONSE: f32 = 0.5;
+/// 등장 스프링의 감쇠비 — 1.0 이면 지나침 없음, 낮출수록 더 통통 튄다.
+///
+/// 지나침의 크기는 **감쇠비만이 아니라 이동 거리에도 비례**한다: 오버슈트 비율은
+/// exp(-πζ/√(1-ζ²)) 이고, 여기 곱해지는 이동 거리가 `1 - DIALOG_SCALE_FROM` = 0.08 뿐이라
+/// 눈에 보이려면 감쇠비를 꽤 낮춰야 한다. ζ0.7 이면 지나침이 배율 0.4%(448px 기준 1.6px)라
+/// 사실상 안 보이고, ζ0.45 면 1.6%(약 7px)로 "톡" 하고 앉는 게 보인다.
+const DIALOG_SPRING_DAMPING: f32 = 0.45;
 
 /// Dialog button props.
 #[derive(Clone)]
@@ -534,6 +543,13 @@ impl RenderOnce for Dialog {
             1.,
         ));
 
+        // 확대 등장은 스프링으로 — 목표 크기를 살짝 지나쳤다 돌아오며 "톡" 하고 앉는다.
+        // 지속 시간은 스프링이 실제로 잦아드는 시간이라 백드롭 페이드보다 길다(오버슈트가
+        // 잘리면 안 되므로). 페이드는 원래 이징을 그대로 쓴다.
+        let (scale_duration, scale_easing) =
+            spring_easing(DIALOG_SPRING_RESPONSE, DIALOG_SPRING_DAMPING);
+        let scale_animation = Animation::new(scale_duration).with_easing(scale_easing);
+
         anchored()
             .position(point(window_paddings.left, window_paddings.top))
             .snap_to_window()
@@ -669,19 +685,22 @@ impl RenderOnce for Dialog {
                                     }))
                                     .with_animation(
                                         "scale-in",
-                                        animation.clone(),
+                                        scale_animation,
                                         move |this, delta| {
+                                            // 그림자 알파는 0..1 을 벗어나면 안 된다 — 스프링
+                                            // 이징은 오버슈트 구간에서 1 을 넘으므로 클램프한다.
+                                            let ink = 0.1 * delta.clamp(0., 1.);
                                             // This is equivalent to `shadow_xl` with an extra opacity.
                                             let shadow = vec![
                                                 BoxShadow {
-                                                    color: hsla(0., 0., 0., 0.1 * delta),
+                                                    color: hsla(0., 0., 0., ink),
                                                     offset: point(px(0.), px(20.)),
                                                     blur_radius: px(25.),
                                                     spread_radius: px(-5.),
                                                     inset: false,
                                                 },
                                                 BoxShadow {
-                                                    color: hsla(0., 0., 0., 0.1 * delta),
+                                                    color: hsla(0., 0., 0., ink),
                                                     offset: point(px(0.), px(8.)),
                                                     blur_radius: px(10.),
                                                     spread_radius: px(-6.),
@@ -694,7 +713,8 @@ impl RenderOnce for Dialog {
                                             //
                                             // delta=1 에서 정확히 1.0 이 나오는 형태로 쓴다 —
                                             // 미세하게 어긋나면 다 뜬 대화상자가 계속 오프스크린
-                                            // 격리를 거친다.
+                                            // 격리를 거친다. `sampled_easing` 은 progress>=1 에서
+                                            // 정확히 1.0 을 돌려주므로 이 조건이 유지된다.
                                             let scale =
                                                 1. - (1. - DIALOG_SCALE_FROM) * (1. - delta);
                                             this.left(x).w(width).appear_scale(scale).shadow(shadow)
