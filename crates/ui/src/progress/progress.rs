@@ -1,9 +1,10 @@
 use crate::{ActiveTheme, Sizable, Size, StyledExt};
 use gpui::{
-    Animation, AnimationExt as _, App, Background, ElementId, Hsla, InteractiveElement as _,
-    IntoElement, ParentElement, RenderOnce, Role, StatefulInteractiveElement as _, StyleRefinement,
-    Styled, Window, div, ease_in_out, prelude::FluentBuilder, px, relative,
+    Animation, AnimationExt as _, App, Background, ElementId, Hsla, IntoElement, IsZero as _,
+    ParentElement, RenderOnce, StyleRefinement, Styled, Window, ease_in_out,
+    prelude::FluentBuilder, px, relative,
 };
+use gpui_base::{Progress as BaseProgress, ProgressIndicator, ProgressTrack};
 use instant::Duration;
 
 use super::ProgressState;
@@ -82,32 +83,41 @@ impl RenderOnce for Progress {
         let mut inner_style = StyleRefinement::default();
         inner_style.corner_radii = radius;
 
-        let (height, radius) = match self.size {
+        let (height, pill_radius) = match self.size {
             Size::XSmall => (px(4.), px(2.)),
             Size::Small => (px(6.), px(3.)),
             Size::Medium => (px(8.), px(4.)),
             Size::Large => (px(10.), px(5.)),
             Size::Size(s) => (s, s / 2.),
         };
+        // The bar reads as a pill of half its own height, and squares off with
+        // the rest of the UI when the theme has no radius.
+        let radius = if cx.theme().radius.is_zero() {
+            px(0.)
+        } else {
+            pill_radius
+        };
 
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ProgressState::new(value));
         let prev_target = state.read(cx).target();
         let has_changed = prev_target != value;
 
-        div()
-            .id(self.id)
-            .role(Role::ProgressIndicator)
-            .aria_numeric_value(value as f64)
-            .aria_min_numeric_value(0.0)
-            .aria_max_numeric_value(100.0)
+        BaseProgress::new(self.id)
+            .value(value)
+            .indeterminate(loading)
             .w_full()
             .relative()
             .h(height)
             .rounded(radius)
             .refine_style(&self.style)
-            .bg(bg.opacity(0.2))
             .child(
-                div()
+                ProgressTrack::new()
+                    .absolute()
+                    .size_full()
+                    .bg(bg.opacity(0.2)),
+            )
+            .child(
+                ProgressIndicator::new()
                     .absolute()
                     .top_0()
                     .left_0()
