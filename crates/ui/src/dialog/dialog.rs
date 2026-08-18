@@ -1,17 +1,15 @@
 use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, App, BoxShadow, ClickEvent, Edges, FocusHandle, Hsla,
-    InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
-    StyleRefinement, Styled, Window, WindowControlArea, anchored, div, hsla, point,
-    prelude::FluentBuilder, px,
+    AnyElement, App, BoxShadow, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement,
+    IntoElement, ParentElement, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window,
+    WindowControlArea, anchored, div, hsla, point, prelude::FluentBuilder, px,
 };
 use gpui_base::{ElementExt as _, TextSelectionScopeId};
 use rust_i18n::t;
 
 use crate::{
     ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, WindowExt as _,
-    animation::{cubic_bezier, spring_easing},
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogContent, DialogTitle},
     scroll::ScrollableElement as _,
@@ -25,17 +23,8 @@ pub use gpui_base::actions::{Cancel, Confirm};
 const DIALOG_BG_ALPHA: f32 = 0.72;
 /// 다이얼로그 뒤 배경을 흐리는 반경(px).
 const DIALOG_BLUR: f32 = 16.0;
-/// 등장 시작 시점의 배율 (1.0 = 최종 크기).
-const DIALOG_SCALE_FROM: f32 = 0.92;
-/// 등장 스프링의 응답 시간(초) — 한 번 왕복하는 데 걸리는 시간.
-const DIALOG_SPRING_RESPONSE: f32 = 0.5;
-/// 등장 스프링의 감쇠비 — 1.0 이면 지나침 없음, 낮출수록 더 통통 튄다.
-///
-/// 지나침의 크기는 **감쇠비만이 아니라 이동 거리에도 비례**한다: 오버슈트 비율은
-/// exp(-πζ/√(1-ζ²)) 이고, 여기 곱해지는 이동 거리가 `1 - DIALOG_SCALE_FROM` = 0.08 뿐이라
-/// 눈에 보이려면 감쇠비를 꽤 낮춰야 한다. ζ0.7 이면 지나침이 배율 0.4%(448px 기준 1.6px)라
-/// 사실상 안 보이고, ζ0.45 면 1.6%(약 7px)로 "톡" 하고 앉는 게 보인다.
-const DIALOG_SPRING_DAMPING: f32 = 0.45;
+/// 다이얼로그 그림자의 검정 alpha (`shadow_xl` 상당).
+const DIALOG_SHADOW_INK: f32 = 0.1;
 
 /// Dialog button props.
 #[derive(Clone)]
@@ -513,7 +502,6 @@ impl RenderOnce for Dialog {
             );
         let y = self.props.margin_top.unwrap_or(view_size.height / 10.) + px(layer_ix as f32 * 16.);
         let x = view_size.width / 2. - self.props.width / 2.;
-        let width = self.props.width;
 
         let base_size = window.text_style().font_size;
         let rem_size = window.rem_size();
@@ -532,23 +520,23 @@ impl RenderOnce for Dialog {
             paddings.bottom = pb.to_pixels(base_size, rem_size);
         }
 
-        // x1 = 1/3, x2 = 2/3 make the bezier's time mapping the identity,
-        // preserving the trajectory this dialog was tuned with before
-        // `cubic_bezier` solved for x; vaul's (0.32, 0.72, 0., 1.) is far
-        // more front-loaded under the CSS-correct solver.
-        let animation = Animation::new(*ANIMATION_DURATION).with_easing(cubic_bezier(
-            1. / 3.,
-            0.72,
-            2. / 3.,
-            1.,
-        ));
-
-        // 확대 등장은 스프링으로 — 목표 크기를 살짝 지나쳤다 돌아오며 "톡" 하고 앉는다.
-        // 지속 시간은 스프링이 실제로 잦아드는 시간이라 백드롭 페이드보다 길다(오버슈트가
-        // 잘리면 안 되므로). 페이드는 원래 이징을 그대로 쓴다.
-        let (scale_duration, scale_easing) =
-            spring_easing(DIALOG_SPRING_RESPONSE, DIALOG_SPRING_DAMPING);
-        let scale_animation = Animation::new(scale_duration).with_easing(scale_easing);
+        // This is equivalent to `shadow_xl` with an extra opacity.
+        let shadow = vec![
+            BoxShadow {
+                color: hsla(0., 0., 0., DIALOG_SHADOW_INK),
+                offset: point(px(0.), px(20.)),
+                blur_radius: px(25.),
+                spread_radius: px(-5.),
+                inset: false,
+            },
+            BoxShadow {
+                color: hsla(0., 0., 0., DIALOG_SHADOW_INK),
+                offset: point(px(0.), px(8.)),
+                blur_radius: px(10.),
+                spread_radius: px(-6.),
+                inset: false,
+            },
+        ];
 
         anchored()
             .position(point(window_paddings.left, window_paddings.top))
@@ -683,47 +671,16 @@ impl RenderOnce for Dialog {
                                                     .icon(IconName::Close),
                                             )
                                     }))
-                                    .with_animation(
-                                        "scale-in",
-                                        scale_animation,
-                                        move |this, delta| {
-                                            // 그림자 알파는 0..1 을 벗어나면 안 된다 — 스프링
-                                            // 이징은 오버슈트 구간에서 1 을 넘으므로 클램프한다.
-                                            let ink = 0.1 * delta.clamp(0., 1.);
-                                            // This is equivalent to `shadow_xl` with an extra opacity.
-                                            let shadow = vec![
-                                                BoxShadow {
-                                                    color: hsla(0., 0., 0., ink),
-                                                    offset: point(px(0.), px(20.)),
-                                                    blur_radius: px(25.),
-                                                    spread_radius: px(-5.),
-                                                    inset: false,
-                                                },
-                                                BoxShadow {
-                                                    color: hsla(0., 0., 0., ink),
-                                                    offset: point(px(0.), px(8.)),
-                                                    blur_radius: px(10.),
-                                                    spread_radius: px(-6.),
-                                                    inset: false,
-                                                },
-                                            ];
-                                            // 위에서 내려오는 대신 살짝 커지며 나타난다 (메뉴와 동일).
-                                            // `appear_scale` 은 레이아웃이 아니라 렌더 결과를
-                                            // 중심 기준으로 확대하므로 폭·위치 보정이 필요 없다.
-                                            //
-                                            // delta=1 에서 정확히 1.0 이 나오는 형태로 쓴다 —
-                                            // 미세하게 어긋나면 다 뜬 대화상자가 계속 오프스크린
-                                            // 격리를 거친다. `sampled_easing` 은 progress>=1 에서
-                                            // 정확히 1.0 을 돌려주므로 이 조건이 유지된다.
-                                            let scale =
-                                                1. - (1. - DIALOG_SCALE_FROM) * (1. - delta);
-                                            this.left(x).w(width).appear_scale(scale).shadow(shadow)
-                                        },
-                                    )
+                                    // 등장 애니메이션 없음 — 최종 크기·불투명도로 바로 나타난다.
+                                    // 확대(`appear_scale`)든 페이드(`opacity`)든 요소를 오프스크린
+                                    // 레이어로 격리해 합성하는데, 격리가 끝나는 순간 버튼·글자 색이
+                                    // 눈에 띄게 바뀐다. 확인 대화상자는 빠른 작업의 길목이라
+                                    // 그 값을 치를 자리가 아니다. (스프링·이징 헬퍼는 남아 있으니
+                                    // 격리 없이 등장을 그릴 방법이 생기면 다시 붙이면 된다.)
+                                    .shadow(shadow)
                                     .text_selection_scope(selection_scope),
                             ),
-                    )
-                    .with_animation("fade-in", animation, move |this, delta| this.opacity(delta)),
+                    ),
             )
             .into_any_element()
     }
