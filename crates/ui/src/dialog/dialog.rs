@@ -1,8 +1,8 @@
 use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
-    AnyElement, App, BoxShadow, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement,
-    IntoElement, ParentElement, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window,
+    AnyElement, App, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement, IntoElement,
+    ParentElement, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window,
     WindowControlArea, anchored, div, hsla, point, prelude::FluentBuilder, px,
 };
 use gpui_base::{ElementExt as _, TextSelectionScopeId};
@@ -13,15 +13,13 @@ use crate::{
     WindowExt as _,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogContent, DialogTitle},
+    dialog_shadow_vec,
     scroll::ScrollableElement as _,
     v_flex,
 };
 
 pub static ANIMATION_DURATION: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs_f64(0.25));
 pub use gpui_base::actions::{Cancel, Confirm};
-
-/// 다이얼로그 그림자의 검정 alpha (`shadow_xl` 상당).
-const DIALOG_SHADOW_INK: f32 = 0.1;
 
 /// Dialog button props.
 #[derive(Clone)]
@@ -517,23 +515,11 @@ impl RenderOnce for Dialog {
             paddings.bottom = pb.to_pixels(base_size, rem_size);
         }
 
-        // This is equivalent to `shadow_xl` with an extra opacity.
-        let shadow = vec![
-            BoxShadow {
-                color: hsla(0., 0., 0., DIALOG_SHADOW_INK),
-                offset: point(px(0.), px(20.)),
-                blur_radius: px(25.),
-                spread_radius: px(-5.),
-                inset: false,
-            },
-            BoxShadow {
-                color: hsla(0., 0., 0., DIALOG_SHADOW_INK),
-                offset: point(px(0.), px(8.)),
-                blur_radius: px(10.),
-                spread_radius: px(-6.),
-                inset: false,
-            },
-        ];
+        // 다이얼로그 그림자 — 테마의 `dialog_shadow_alpha` 를 읽는다. 손으로 적은 검정
+        // alpha 0.1 짜리 `shadow_xl` 은 어두운 배경 + 딤 백드롭 위에서 아예 보이지 않아
+        // 대화상자가 배경에 붙은 종이처럼 떠 보이지 않았다 (같은 이유로 테마가 alpha 를
+        // 갖고 있다). 팝업이 쓰는 `popup_shadow_vec` 의 한 단 위 프로파일.
+        let shadow = dialog_shadow_vec(cx.theme().dialog_shadow_alpha);
 
         anchored()
             .position(point(window_paddings.left, window_paddings.top))
