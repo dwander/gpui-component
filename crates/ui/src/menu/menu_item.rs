@@ -7,7 +7,7 @@ use gpui::{
 use smallvec::SmallVec;
 
 /// 항목 호버/선택 막대 불투명도 — 불투명하면 반투명 메뉴 표면 위에 불투명 띠가 얹혀
-/// 블러가 그 줄에서만 끊겨 보인다. (popup_menu.rs 의 MENU_BG_ALPHA 와 짝)
+/// 블러가 그 줄에서만 끊겨 보인다. (`FROSTED_BG_ALPHA` 표면과 짝)
 const ITEM_HIGHLIGHT_ALPHA: f32 = 0.55;
 
 #[derive(IntoElement)]

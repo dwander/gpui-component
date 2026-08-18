@@ -37,6 +37,38 @@ pub(crate) fn popover_ring(cx: &App) -> Hsla {
     cx.theme().foreground.alpha(POPOVER_RING_INK)
 }
 
+// ── 프로스티드 표면 (반투명 + 뒤 블러 + 유리 림) ──────────────────────────────
+//
+// 메뉴·드롭다운·컨텍스트 메뉴·확인 대화상자가 **같은 재질**로 보이게 하는 단일 출처.
+// 값이 갈라지면 창 하나에 유리가 두 종류 뜬다 — 새 표면은 여기서 가져다 쓴다.
+
+/// 표면 배경 불투명도 — 뒤를 블러가 눌러주므로 살짝 비치게 둔다.
+pub const FROSTED_BG_ALPHA: f32 = 0.82;
+/// 뒤 배경을 흐리는 반경(px). 크게 잡으면 뒤가 균일한 색으로 뭉개져 유리가 아니라 글로우로
+/// 보인다 — 뒤 형체를 알아볼 수 있을 만큼만 흐린다.
+pub const FROSTED_BLUR: f32 = 5.;
+/// 유리 테두리(림) 두께(px). 1px 짜리 중성 보더는 표면과 그림자 사이에 아무 여백이 없어
+/// **그림자가 테두리에서 곧바로 시작되는 것처럼** 보인다(가장자리가 지저분해진다). 조금 두꺼운
+/// 밝은 띠를 두르면 그 띠가 표면과 그림자를 갈라, 두께가 있는 유리 모서리로 읽힌다.
+pub const FROSTED_RIM: f32 = 2.5;
+/// 림의 불투명도 — 흰 띠라 표면이 어두운 다크에서는 옅어도 또렷하고, 표면이 이미 밝은
+/// 라이트에서는 거의 흰색이어야 띠로 읽힌다.
+const FROSTED_RIM_ALPHA_DARK: f32 = 0.16;
+const FROSTED_RIM_ALPHA_LIGHT: f32 = 0.8;
+/// 표면 모서리 반경(px).
+pub const FROSTED_RADIUS: f32 = 8.;
+
+/// 유리 림 색 — 표면 가장자리에 두르는 밝은 띠. 어느 테마에서든 표면보다 밝아야 하므로
+/// 흰색에 테마별 불투명도를 준다.
+pub fn frosted_rim(cx: &App) -> Hsla {
+    let alpha = if cx.theme().is_dark() {
+        FROSTED_RIM_ALPHA_DARK
+    } else {
+        FROSTED_RIM_ALPHA_LIGHT
+    };
+    hsla(0., 0., 1., alpha)
+}
+
 /// 검정 그림자 레이어 하나 — y 오프셋·blur·spread·alpha 로 생성.
 #[inline(always)]
 fn shadow_layer(y: f32, blur: f32, spread: f32, a: f32) -> BoxShadow {
@@ -168,6 +200,19 @@ pub trait ThemeStyled: Styled + Sized {
     /// Combobox, DatePicker and the editor's hover popovers — so they cannot
     /// drift apart. See [`popover_shadow`] for what the shadow is modelled on.
     fn popover_style(self, cx: &App) -> Self;
+
+    /// 프로스티드 표면 — 반투명 배경 + 뒤 블러 + 밝은 유리 림 + 표면 반경.
+    ///
+    /// `base` 는 표면색 토큰(메뉴는 `popover`, 대화상자는 `background`). 그림자는 표면마다
+    /// 높이가 달라 호출부가 얹는다 — 드롭 그림자는 요소 박스를 파내고 그려지므로(gpui)
+    /// 반투명 배경이 자기 그림자에 물들지 않는다.
+    fn frosted_surface_style(self, base: Hsla, cx: &App) -> Self {
+        self.bg(base.opacity(FROSTED_BG_ALPHA))
+            .backdrop_blur(px(FROSTED_BLUR))
+            .border(px(FROSTED_RIM))
+            .border_color(frosted_rim(cx))
+            .rounded(px(FROSTED_RADIUS))
+    }
 
     /// Round this element as far as its size allows — a circle if it is square,
     /// a pill if it is not — unless the theme squares its corners.

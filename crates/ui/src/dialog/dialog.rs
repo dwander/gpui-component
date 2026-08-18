@@ -9,7 +9,8 @@ use gpui_base::{ElementExt as _, TextSelectionScopeId};
 use rust_i18n::t;
 
 use crate::{
-    ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, WindowExt as _,
+    ActiveTheme as _, IconName, Root, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, ThemeStyled as _,
+    WindowExt as _,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogContent, DialogTitle},
     scroll::ScrollableElement as _,
@@ -19,10 +20,6 @@ use crate::{
 pub static ANIMATION_DURATION: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs_f64(0.25));
 pub use gpui_base::actions::{Cancel, Confirm};
 
-/// 다이얼로그 배경 불투명도 — 뒤를 블러가 눌러주므로 살짝 비치게 둔다.
-const DIALOG_BG_ALPHA: f32 = 0.72;
-/// 다이얼로그 뒤 배경을 흐리는 반경(px).
-const DIALOG_BLUR: f32 = 16.0;
 /// 다이얼로그 그림자의 검정 alpha (`shadow_xl` 상당).
 const DIALOG_SHADOW_INK: f32 = 0.1;
 
@@ -590,12 +587,9 @@ impl RenderOnce for Dialog {
                             .popup(
                                 v_flex()
                                     .id(layer_ix)
-                                    // 반투명 + 뒤 블러 (프로스티드) — 메뉴/팝오버와 톤을 맞춘다.
-                                    .bg(cx.theme().tokens.background.opacity(DIALOG_BG_ALPHA))
-                                    .backdrop_blur(px(DIALOG_BLUR))
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded(cx.theme().radius_lg)
+                                    // 프로스티드 표면 — 메뉴/컨텍스트 메뉴와 같은 재질(반투명 +
+                                    // 뒤 블러 + 유리 림). 그림자는 아래에서 한 단 높게 얹는다.
+                                    .frosted_surface_style(*cx.theme().tokens.background, cx)
                                     .min_h_24()
                                     .pt(paddings.top)
                                     .pb(paddings.bottom)

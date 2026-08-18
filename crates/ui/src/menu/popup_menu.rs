@@ -3,7 +3,9 @@ use crate::actions::{Cancel, Confirm, SelectDown, SelectUp};
 use crate::actions::{SelectLeft, SelectRight};
 use crate::menu::menu_item::MenuItemElement;
 use crate::scroll::ScrollableElement;
-use crate::{ActiveTheme, ElementExt, Icon, IconName, Sizable as _, h_flex, v_flex};
+use crate::{
+    ActiveTheme, ElementExt, Icon, IconName, Sizable as _, h_flex, popup_shadow_vec, v_flex,
+};
 use crate::{Side, Size, kbd::Kbd};
 use gpui::{
     Action, Anchor, AnyElement, App, AppContext, Bounds, Context, DismissEvent, Edges, Entity,
@@ -16,10 +18,6 @@ use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Point, Subscription}
 use std::rc::Rc;
 
 const CONTEXT: &str = "PopupMenu";
-/// 메뉴 배경 불투명도 — 뒤를 블러가 눌러주므로 살짝 비치게 둔다.
-const MENU_BG_ALPHA: f32 = 0.72;
-/// 메뉴 뒤 배경을 흐리는 반경(px).
-const MENU_BLUR: f32 = 16.0;
 
 pub fn init(cx: &mut App) {
     cx.bind_keys([
@@ -1467,11 +1465,11 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::confirm))
             .on_action(cx.listener(Self::dismiss))
             .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
-            .popover_style(cx)
-            // 반투명 배경 + 뒤 블러 (프로스티드) — 앱의 팝오버/드롭다운과 톤을 맞춘다.
-            // popover_style 이 불투명 bg 를 깔아두므로 여기서 덮어쓴다.
-            .bg(cx.theme().tokens.popover.opacity(MENU_BG_ALPHA))
-            .backdrop_blur(px(MENU_BLUR))
+            // 프로스티드 표면 — 메뉴·드롭다운·확인 대화상자가 공유하는 재질.
+            // `popover_style` 의 불투명 배경 + 헤어라인 링 대신 쓴다: 링(1px 그림자 레이어)은
+            // 유리 림과 겹쳐 가장자리가 두 겹으로 보인다.
+            .frosted_surface_style(*cx.theme().tokens.popover, cx)
+            .shadow(popup_shadow_vec(cx.theme().popup_shadow_alpha))
             .text_color(cx.theme().popover_foreground)
             .relative()
             .occlude()
