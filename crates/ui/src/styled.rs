@@ -143,6 +143,23 @@ pub trait ThemeStyled: Styled + Sized {
     /// clip.
     fn focus_ring_style(self, window: &Window, cx: &App) -> Self
     where
+        Self: ParentElement,
+    {
+        if !cx.theme().focus_ring {
+            return self.border_color(cx.theme().ring);
+        }
+        self.focus_ring_style_always(window, cx)
+    }
+
+    /// The focus ring, drawn whether or not [`crate::Theme::focus_ring`] is on.
+    ///
+    /// For controls whose focus would otherwise become invisible: the tinted
+    /// border that [`Self::focus_ring_style`] falls back to needs a border to
+    /// tint, and a filled control (a Primary or Danger button, say) draws none.
+    /// Those keep the ring, so turning the theme switch off quiets the controls
+    /// that do have a border — inputs — without leaving the rest unreadable.
+    fn focus_ring_style_always(self, window: &Window, cx: &App) -> Self
+    where
         Self: ParentElement;
 
     /// Give this element the surface, edge, shadow and radius of a popover.
@@ -174,17 +191,10 @@ impl<T: Styled + Sized> ThemeStyled for T {
     /// The ring sits outside the element's border, so an ancestor that clips
     /// its content will cut it off — leave it a few pixels of room, or don't
     /// clip.
-    fn focus_ring_style(mut self, window: &Window, cx: &App) -> Self
+    fn focus_ring_style_always(mut self, window: &Window, cx: &App) -> Self
     where
         Self: ParentElement,
     {
-        // The ring is painted outside the border, so a clipping ancestor cuts
-        // it off. An application whose layout clips heavily turns it off in the
-        // theme and keeps the tinted border, which takes no space.
-        if !cx.theme().focus_ring {
-            return self.border_color(cx.theme().ring);
-        }
-
         let rem_size = window.rem_size();
         let style = self.style();
         let border_widths = Edges::<Pixels> {

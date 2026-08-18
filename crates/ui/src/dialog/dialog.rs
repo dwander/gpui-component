@@ -563,7 +563,14 @@ impl RenderOnce for Dialog {
                                 this.backdrop(
                                     div()
                                         .absolute()
-                                        .size_full()
+                                        // 뷰포트 크기를 **직접** 준다 — `size_full()` 은 부모의
+                                        // 100% 인데, gpui_base 가 백드롭을 감싸는 div 는 크기를
+                                        // 주지 않고 우리가 넣는 자식은 absolute 라 부모 크기에
+                                        // 기여하지 않는다. 결국 부모가 0×0 이 되어 스크림이
+                                        // 통째로 사라진다 (병합 전에는 이 요소가 전체화면 컨테이너
+                                        // 자신이라 size_full 이 맞았다).
+                                        .w(view_size.width)
+                                        .h(view_size.height)
                                         .window_control_area(WindowControlArea::Drag)
                                         .when(self.props.overlay_visible, |overlay| {
                                             overlay.bg(overlay_color(true, cx))

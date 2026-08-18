@@ -729,8 +729,12 @@ impl RenderOnce for Button {
                 this
             }
         })
+        // 버튼은 테마 스위치와 무관하게 링을 그린다 — 스위치가 떨어뜨리는 "테두리 물들이기"
+        // 는 물들일 테두리가 있어야 하는데, 채움 변형(Primary·Danger…)은 테두리를 아예
+        // 그리지 않아 포커스가 통째로 안 보이게 된다. 스위치는 테두리를 가진 입력칸만
+        // 조용하게 만드는 용도다.
         .when(is_focused && self.focus_ring_enabled, |this| {
-            this.focus_ring_style(window, cx)
+            this.focus_ring_style_always(window, cx)
         })
     }
 }
