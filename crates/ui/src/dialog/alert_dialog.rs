@@ -184,6 +184,9 @@ impl AlertDialog {
     ///
     /// Use this to configure button text, variants, and visibility.
     ///
+    /// **Call this before** [`Self::on_ok`] / [`Self::on_cancel`] / [`Self::on_close`] — it replaces
+    /// the whole prop set, callbacks included, so any callback registered earlier is dropped.
+    ///
     /// # Examples
     ///
     /// ```ignore
@@ -214,6 +217,16 @@ impl AlertDialog {
         self
     }
 
+    /// Set whether the overlay is dimmed, defaults to `true`.
+    ///
+    /// When `false`, the backdrop still blocks mouse events for the elements behind it, but no
+    /// scrim is painted — use it when the user must keep seeing what the alert is about
+    /// (e.g. the files a delete confirmation is going to remove).
+    pub fn overlay_dim(mut self, overlay_dim: bool) -> Self {
+        self.base = self.base.overlay_dim(overlay_dim);
+        self
+    }
+
     /// Alert dialogs never close from a backdrop press.
     #[deprecated(note = "AlertDialog backdrop dismissal is disabled by design")]
     pub fn overlay_closable(self, _: bool) -> Self {
@@ -235,11 +248,16 @@ impl AlertDialog {
     /// Sets the callback for when the alert dialog is closed.
     ///
     /// Called after [`Self::on_action`] or [`Self::on_cancel`] callback.
+    ///
+    /// Kept on **this** dialog's `button_props` — same place as [`Self::on_ok`] / [`Self::on_cancel`].
+    /// Storing it on the base would silently lose it, because [`Self::build_surface`] overwrites the
+    /// base's `button_props` with ours (the callback vanished whenever `.button_props()` was called
+    /// after `.on_close()`).
     pub fn on_close(
         mut self,
         on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.base = self.base.on_close(on_close);
+        self.button_props = self.button_props.on_close(on_close);
         self
     }
 
@@ -327,8 +345,7 @@ impl AlertDialog {
         let content_builder = self.base.content_builder.clone();
         let style = self.base.style.clone();
         let props = self.base.props.clone();
-        let mut button_props = self.button_props.clone();
-        button_props.on_close = self.base.button_props.on_close.clone();
+        let button_props = self.button_props.clone();
 
         gpui_base::AlertDialogTrigger::new(trigger)
             .on_open(move |window, cx| {

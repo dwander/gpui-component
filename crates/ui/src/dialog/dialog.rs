@@ -80,6 +80,15 @@ impl DialogButtonProps {
         self
     }
 
+    /// Sets the callback for when the dialog has been closed, by any path (OK, Cancel, Esc).
+    pub fn on_close(
+        mut self,
+        on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_close = Rc::new(on_close);
+        self
+    }
+
     /// Sets the callback for when the dialog is has been confirmed.
     ///
     /// The callback should return `true` to close the dialog, if return `false` the dialog will not be closed.
@@ -145,6 +154,9 @@ pub(crate) struct DialogProps {
     overlay: bool,
     overlay_closable: bool,
     pub(crate) overlay_visible: bool,
+    /// 백드롭에 딤(스크림)을 칠할지. `false` 여도 백드롭 자체는 남아 뒤 요소로의 마우스
+    /// 이벤트를 계속 막는다 — 뒤가 그대로 보여야 하는 대화상자(삭제 대상 확인 등)를 위한 것.
+    overlay_dim: bool,
     keyboard: bool,
 }
 
@@ -157,6 +169,7 @@ impl Default for DialogProps {
             overlay: true,
             keyboard: true,
             overlay_visible: false,
+            overlay_dim: true,
             close_button: true,
             overlay_closable: true,
         }
@@ -337,7 +350,7 @@ impl Dialog {
         mut self,
         on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.button_props.on_close = Rc::new(on_close);
+        self.button_props = self.button_props.on_close(on_close);
         self
     }
 
@@ -398,6 +411,15 @@ impl Dialog {
     /// Set the overlay of the dialog, defaults to `true`.
     pub fn overlay(mut self, overlay: bool) -> Self {
         self.props.overlay = overlay;
+        self
+    }
+
+    /// Set whether the overlay is dimmed, defaults to `true`.
+    ///
+    /// When `false`, the backdrop still blocks mouse events for the elements behind it, but no
+    /// scrim is painted — the content behind the dialog stays fully visible.
+    pub fn overlay_dim(mut self, overlay_dim: bool) -> Self {
+        self.props.overlay_dim = overlay_dim;
         self
     }
 
@@ -555,9 +577,10 @@ impl RenderOnce for Dialog {
                                         .w(view_size.width)
                                         .h(view_size.height)
                                         .window_control_area(WindowControlArea::Drag)
-                                        .when(self.props.overlay_visible, |overlay| {
-                                            overlay.bg(overlay_color(true, cx))
-                                        }),
+                                        .when(
+                                            self.props.overlay_visible && self.props.overlay_dim,
+                                            |overlay| overlay.bg(overlay_color(true, cx)),
+                                        ),
                                 )
                             })
                             .on_ok(move |event, window, cx| on_ok(event, window, cx))
