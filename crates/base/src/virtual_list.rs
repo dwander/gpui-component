@@ -31,6 +31,8 @@ use crate::{AxisExt, InteractiveElementExt as _};
 struct VirtualListScrollHandleState {
     axis: Axis,
     items_count: usize,
+    /// Content bounds size (excluding padding and border) from the last frame.
+    last_content_size: Option<Size<Pixels>>,
     pub deferred_scroll_to_item: Option<DeferredScrollToItem>,
 }
 
@@ -90,6 +92,7 @@ impl VirtualListScrollHandle {
             state: Rc::new(RefCell::new(VirtualListScrollHandleState {
                 axis: Axis::Vertical,
                 items_count: 0,
+                last_content_size: None,
                 deferred_scroll_to_item: None,
             })),
             base_handle: ScrollHandle::default(),
@@ -320,6 +323,8 @@ pub struct ItemSizeLayout {
     items_sizes: Rc<Vec<Size<Pixels>>>,
     /// Item index the cached cross-axis `content_size` was measured from, if measured at all.
     measured_item_ix: Option<usize>,
+    /// Width constraint the cached cross-axis `content_size` was measured at (vertical lists).
+    measured_list_width: Option<Pixels>,
     content_size: Size<Pixels>,
     sizes: Vec<Pixels>,
     origins: Vec<Pixels>,
@@ -356,6 +361,20 @@ impl Element for VirtualList {
         let rem_size = window.rem_size();
         let font_size = window.text_style().font_size.to_pixels(rem_size);
         let mut size_layout = ItemSizeLayout::default();
+        // Measure vertical lists at the last known content width so relative
+        // widths and text truncation resolve like the visible rows; an
+        // unconstrained measure would turn one long non-wrapping text into a
+        // phantom horizontal scroll range.
+        let list_width = if self.axis.is_vertical() {
+            self.scroll_handle
+                .state
+                .borrow()
+                .last_content_size
+                .map(|size| size.width)
+                .filter(|width| !width.is_zero())
+        } else {
+            None
+        };
 
         let layout_id = self.base.interactivity().request_layout(
             global_id,
@@ -372,7 +391,8 @@ impl Element for VirtualList {
                     |state: Option<ItemSizeLayout>, _window| {
                         let state = state.unwrap_or_default();
                         let needs_measure = state.items_sizes != self.item_sizes
-                            || state.measured_item_ix != Some(self.item_to_measure_index);
+                            || state.measured_item_ix != Some(self.item_to_measure_index)
+                            || state.measured_list_width != list_width;
                         (needs_measure, state)
                     },
                 );
@@ -388,8 +408,12 @@ impl Element for VirtualList {
                     let Some(mut item_to_measure) = items.pop() else {
                         return Size::default();
                     };
-                    let available_space =
-                        size(AvailableSpace::MinContent, AvailableSpace::MinContent);
+                    let available_space = size(
+                        list_width.map_or(AvailableSpace::MinContent, |width| {
+                            AvailableSpace::Definite(width)
+                        }),
+                        AvailableSpace::MinContent,
+                    );
                     item_to_measure.layout_as_root(available_space, window, cx)
                 });
 
@@ -450,6 +474,7 @@ impl Element for VirtualList {
 
                         if let Some(longest_item_size) = longest_item_size {
                             state.measured_item_ix = Some(self.item_to_measure_index);
+                            state.measured_list_width = list_width;
                             if self.axis.is_horizontal() {
                                 state.content_size.height = longest_item_size.height;
                             } else {
@@ -596,6 +621,7 @@ impl Element for VirtualList {
         let mut scroll_state = self.scroll_handle.state.borrow_mut();
         scroll_state.axis = axis;
         scroll_state.items_count = self.items_count;
+        scroll_state.last_content_size = Some(content_bounds.size);
 
         let mut scroll_offset = self.scroll_handle.offset();
         if let Some(scroll_to_item) = scroll_state.deferred_scroll_to_item.take() {

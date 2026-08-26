@@ -49,12 +49,22 @@ jobs:
       - name: Typo check
         if: ${{ matrix.run_on == 'macos-latest' }}
         run: |
-          cargo install typos-cli || echo "typos-cli already installed"
+          command -v typos >/dev/null || cargo install typos-cli
           typos
+      - name: Skill guides are in sync
+        if: ${{ matrix.run_on == 'macos-latest' }}
+        run: |
+          for guide in coding-guides design-guides; do
+            if ! diff -u "website/docs/$guide.md" "skills/gpui-component/references/$guide.md"; then
+              echo "::error::skills/gpui-component/references/$guide.md is stale."
+              echo "Run: cp website/docs/$guide.md skills/gpui-component/references/$guide.md"
+              exit 1
+            fi
+          done
       - name: Lint
         if: ${{ matrix.run_on == 'macos-latest' }}
         run: |
-          cargo clippy -- --deny warnings
+          cargo clippy -p gpui-component -p gpui-component-story -p gpui-component-assets -- --deny warnings
       - name: Check without default features (tree-sitter disabled)
         if: ${{ matrix.run_on == 'ubuntu-latest' }}
         run: |
@@ -62,13 +72,13 @@ jobs:
       - name: Test Linux
         if: ${{ matrix.run_on == 'ubuntu-latest' }}
         run: |
-          cargo test --all
+          cargo test --all --features gpui-component-story/test-support
       - name: Test Windows
         if: ${{ matrix.run_on == 'windows-latest' }}
         run: |
-          cargo test --all
+          cargo test --all --features gpui-component-story/test-support
       - name: Test MacOS
         if: ${{ matrix.run_on == 'macos-latest' }}
         run: |
-          cargo test --all
+          cargo test --all --features gpui-component-story/test-support
           cargo test -p gpui-component --doc

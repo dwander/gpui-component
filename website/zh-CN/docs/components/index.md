@@ -34,14 +34,16 @@ collapsed: false
 
 ## 布局与高级组件
 
+- [Command](command) - 用于搜索与快捷操作的命令面板
 - [Dialog](dialog) - 对话框与模态窗口
 - [Popover](popover) - 浮层内容
 - [Resizable](resizable) - 可调整大小的面板
 - [Scrollable](scrollable) - 可滚动容器
 - [Sidebar](sidebar) - 侧边栏导航
-- [StatusBar](status-bar) - 底部状态栏,含左/中/右三区
+- [StatusBar](status-bar) - 底部状态栏，含左/中/右三区
 - [Chart](chart) - 图表组件
 - [DataTable](data-table) - 高性能数据表格
+- [Dock](/zh-CN/docs/dock) - 支持标签、分割与状态持久化的生产级 Dock 布局
 - [Tree](tree) - 树形结构组件
 - [VirtualList](virtual-list) - 大数据量虚拟列表
 
