@@ -37,7 +37,7 @@ html.dark .alignment-dark {
   --radius: var(--radius-control);
 
   /* Every colour below is taken from the library's own default theme
-     (crates/ui/src/theme/default-theme.json, "Default Light") so the site and
+     (crates/component/src/theme/default-theme.json, "Default Light") so the site and
      the components it documents are literally the same palette.
 
      primary.background / .hover / .foreground */
@@ -701,6 +701,21 @@ html[lang^="ja"] :is(h1, h2, h3, h4) {
   }
 }
 
+/* `layout: home` is how the site's own surfaces — App Stories, Skills,
+   Contributors, Releases — opt out of the docs shell. VitePress pads only the
+   hero and feature bands it would render there, and these pages render
+   neither, so their markdown started flush against the toolbar. Give the
+   content the same top offset as a docs page. */
+.VPContent.is-home .VPHome > .vp-doc {
+  padding-top: 2rem;
+}
+
+@media (min-width: 768px) {
+  .VPContent.is-home .VPHome > .vp-doc {
+    padding-top: 3rem;
+  }
+}
+
 .vp-doc {
   color: var(--vp-c-text-1);
 
@@ -844,6 +859,14 @@ html[lang^="ja"] :is(h1, h2, h3, h4) {
 
   tbody tr:last-child td {
     border-bottom: 0;
+  }
+
+  /* The examples overview uses its first column as a compact row label. Keep
+     labels such as "Todo list" and “报价面板” intact instead of letting the
+     browser squeeze that column to the width of one word or two Han glyphs. */
+  .shell-examples-page & table:first-of-type :is(th, td):first-child {
+    min-width: 6.5rem;
+    white-space: nowrap;
   }
 
   th:first-child,
@@ -1203,15 +1226,20 @@ html[lang^="ja"] :is(h1, h2, h3, h4) {
 /* The gallery follows the docs theme, and `neutral-950` is its dark
    background. */
 .component-example--component iframe {
-  @apply bg-white dark:bg-[#0a0a0a];
+  @apply bg-white dark:bg-[#0e0e0e];
 }
 
-/* The base showcase is a deliberately unstyled demo with hard-coded light
-   colours, so its frame stays light in dark mode too. */
+/* Base owns no product theme, but its neutral example palette follows the
+   documentation appearance. `color-scheme` propagates through the iframe, so
+   GPUI Web's `prefers-color-scheme` observer sees the same mode. */
 .component-example--base iframe {
   height: 600px;
   color-scheme: light;
-  @apply bg-white;
+  @apply bg-white dark:bg-[#0a0a0a];
+}
+
+.dark .component-example--base iframe {
+  color-scheme: dark;
 }
 
 @media (max-width: 640px) {
