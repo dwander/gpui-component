@@ -48,11 +48,17 @@ gpui-wry = { path = "crates/webview", version = "0.6.0" }
 gpui-component-shell = { path = "crates/component-shell", version = "0.6.0" }
 story = { path = "crates/story" }
 
-gpui = { package = "gpui-pre", version = "0.3.1" }
-gpui_platform = { package = "gpui-pre-platform", version = "0.3.1", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
-gpui_web = { package = "gpui-pre-web", version = "0.3.1" }
-gpui_macros = { package = "gpui-pre-macros", version = "0.3.1" }
-reqwest_client = { package = "gpui-pre-reqwest-client", version = "0.3.1" }
+# [PiCell 포크 패치] 업스트림은 이 5개를 crates.io 의 `gpui-pre-*`(longbridge 가 재배포하는
+# zed gpui 스냅샷)로 받는다. 우리는 로컬 `../zed` 체크아웃에 우리 gpui 패치를 얹어 쓰므로,
+# 그대로 두면 gpui 가 두 벌 링크돼 `Entity<T>` 같은 타입이 서로 다른 크레이트 것이 되어
+# 컴파일이 깨진다. zed git 을 가리키게 두고, 앱 워크스페이스의
+# `[patch."https://github.com/zed-industries/zed"]` 가 로컬 경로로 재지정한다.
+# ⚠ 업스트림 병합 때마다 이 블록이 되살아나는지 확인할 것.
+gpui = { version = "0.2.2", git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui_web = { git = "https://github.com/zed-industries/zed" }
+gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
+reqwest_client = { git = "https://github.com/zed-industries/zed" }
 sum-tree = { package = "gpui-pre-sum-tree", version = "0.3.1" }
 reqwest = { package = "gpui-pre-reqwest", version = "0.12.15", default-features = false, features = [
     "charset",
@@ -127,14 +133,14 @@ rustybuzz = { opt-level = 3 }
 taffy = { opt-level = 3 }
 ttf-parser = { opt-level = 3 }
 smol = { opt-level = 3 }
-gpui-pre = { opt-level = 3 }
-gpui-pre-platform = { opt-level = 3 }
-gpui-pre-macros = { opt-level = 3 }
+gpui = { opt-level = 3 }
+gpui_platform = { opt-level = 3 }
+gpui_macros = { opt-level = 3 }
 tree-sitter = { opt-level = 3 }
 gpui-pre-sum-tree = { opt-level = 3 }
 ropey = { opt-level = 3 }
 lsp-types = { opt-level = 3 }
-gpui-pre-reqwest-client = { opt-level = 3 }
+reqwest_client = { opt-level = 3 }
 markdown = { opt-level = 3 }
 xml5ever = { opt-level = 3 }
 # `rquickjs` is a facade that re-exports `rquickjs-core`, so naming it alone

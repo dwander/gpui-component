@@ -9,20 +9,18 @@ use quote::quote;
 /// preserves standalone `gpui-component` consumers, including dependencies
 /// that rename that package to `gpui` (the conventional name).
 pub(crate) fn gpui() -> syn::Result<TokenStream> {
-    match crate_name("gpui-kit") {
-        Ok(found) => Ok(found_crate_path(found)),
-        Err(kit_error) => crate_name("gpui-pre")
-            .map(found_crate_path)
-            .map_err(|gpui_error| {
-                syn::Error::new(
-                    Span::call_site(),
-                    format!(
-                        "IntoPlot requires a direct dependency on `gpui-kit` or `gpui-pre`: \
-                         gpui-kit lookup failed: {kit_error}; gpui-pre lookup failed: {gpui_error}"
-                    ),
-                )
-            }),
+    // [PiCell 포크 패치] 세 번째 후보 `gpui` 를 더한다. 업스트림은 crates.io 의
+    // `gpui-pre*` 재배포본만 상정하지만, 우리는 로컬 `../zed` 체크아웃을 쓰고 그 패키지
+    // 이름은 그냥 `gpui` 라서 위 두 이름으로는 절대 찾히지 않는다.
+    for candidate in ["gpui-kit", "gpui-pre", "gpui"] {
+        if let Ok(found) = crate_name(candidate) {
+            return Ok(found_crate_path(found));
+        }
     }
+    Err(syn::Error::new(
+        Span::call_site(),
+        "IntoPlot requires a direct dependency on `gpui-kit`, `gpui-pre` or `gpui`",
+    ))
 }
 
 fn found_crate_path(found: FoundCrate) -> TokenStream {
