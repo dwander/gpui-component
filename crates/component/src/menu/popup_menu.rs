@@ -698,9 +698,23 @@ impl PopupMenu {
 
     /// Add a Submenu item with icon
     pub fn submenu_with_icon(
+        self,
+        icon: Option<Icon>,
+        label: impl Into<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        f: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
+    ) -> Self {
+        self.submenu_with_icon_disabled(icon, label, false, window, cx, f)
+    }
+
+    /// Add a Submenu item with icon and disabled state — a disabled submenu renders greyed
+    /// out and does not open on hover/click.
+    pub fn submenu_with_icon_disabled(
         mut self,
         icon: Option<Icon>,
         label: impl Into<SharedString>,
+        disabled: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
         f: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
@@ -714,7 +728,9 @@ impl PopupMenu {
         });
 
         self.menu_items.push(
-            PopupMenuItem::submenu(label, submenu).when_some(icon, |this, icon| this.icon(icon)),
+            PopupMenuItem::submenu(label, submenu)
+                .when_some(icon, |this, icon| this.icon(icon))
+                .disabled(disabled),
         );
         self
     }
@@ -857,7 +873,10 @@ impl PopupMenu {
                 let item = self.menu_items.get(index);
                 match item {
                     Some(PopupMenuItem::Item {
-                        handler, action, keep_open, ..
+                        handler,
+                        action,
+                        keep_open,
+                        ..
                     }) => {
                         let keep = *keep_open;
                         if let Some(handler) = handler {
@@ -870,7 +889,10 @@ impl PopupMenu {
                         }
                     }
                     Some(PopupMenuItem::ElementItem {
-                        handler, action, keep_open, ..
+                        handler,
+                        action,
+                        keep_open,
+                        ..
                     }) => {
                         let keep = *keep_open;
                         if let Some(handler) = handler {
