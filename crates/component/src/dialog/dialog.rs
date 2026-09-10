@@ -1,3 +1,4 @@
+use gpui_base::TestSupportExt as _;
 use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
@@ -549,6 +550,7 @@ impl RenderOnce for Dialog {
             .child(
                 div()
                     .id("dialog")
+                    .test_support()
                     .occlude()
                     .w(view_size.width)
                     .h(view_size.height)
@@ -596,8 +598,10 @@ impl RenderOnce for Dialog {
                             .popup(
                                 v_flex()
                                     .id(layer_ix)
+                                    .test_support()
                                     // 프로스티드 표면 — 메뉴/컨텍스트 메뉴와 같은 재질(반투명 +
                                     // 뒤 블러 + 유리 림). 그림자는 아래에서 한 단 높게 얹는다.
+                                    // (상류의 bg/border_1/rounded 를 이 한 줄이 대신한다)
                                     .frosted_surface_style(*cx.theme().tokens.background, cx)
                                     .min_h_24()
                                     .pt(paddings.top)
@@ -674,12 +678,13 @@ impl RenderOnce for Dialog {
                                             .absolute()
                                             .top(top)
                                             .right(right)
-                                            .child(
+                                            .trigger(|button| {
                                                 Button::new("close")
+                                                    .with_base(button)
                                                     .small()
                                                     .ghost()
-                                                    .icon(IconName::Close),
-                                            )
+                                                    .icon(IconName::Close)
+                                            })
                                     }))
                                     // 등장 애니메이션 없음 — 최종 크기·불투명도로 바로 나타난다.
                                     // 확대(`appear_scale`)든 페이드(`opacity`)든 요소를 오프스크린

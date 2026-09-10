@@ -15,11 +15,10 @@ GPUI Kit 是一个综合性的 Rust 桌面应用开发框架。它将生产级 U
 ```text
 gpui-kit             应用唯一需要依赖的 crate
 ├── gpui-base        无样式的行为、状态与基础设施
-├── gpui-shell       为 Rust 宿主提供 JavaScript 扩展能力
 └── gpui-component   GPUI Component：完整的带样式 UI 系统
 ```
 
-`gpui-kit` 会固定配套的 GPUI 版本并重新导出全部三层，应用只需声明这一个依赖，无需接触 GPUI 本身。
+`gpui-kit` 会固定配套的 GPUI 版本并导出 GPUI、base、component 和 assets，Rust 应用只需声明这一个依赖。JavaScript 扩展宿主另行依赖 `gpui-shell`；`gpui-component-shell` 提供带样式的组件目录。
 
 ## 特性
 
@@ -175,25 +174,25 @@ cargo run
 
 ### Examples
 
-一些重要的示例内置在 `story` crate 中，可以直接运行：
+一些较大的示例复用 `story` 画廊组件，并作为独立 package 运行：
 
 ```bash
-# 支持 LSP 和语法高亮的代码编辑器
-cargo run --example editor
-
 # Dock 布局系统（面板、分割视图、标签页）
-cargo run --example dock
+cargo run -p example-dock
 
 # Markdown 渲染
-cargo run --example markdown
+cargo run -p example-markdown
 
 # HTML 渲染
-cargo run --example html
+cargo run -p example-html
 ```
 
 `examples` 目录还包含独立示例，每个示例专注于单一功能。每个示例是一个独立的 crate，使用 `cargo run -p <name>` 运行：
 
 ```bash
+# 支持 LSP 和语法高亮的代码编辑器
+cargo run -p example-editor
+
 # 基础 Hello World
 cargo run -p hello_world
 

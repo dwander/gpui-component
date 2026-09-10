@@ -17,6 +17,7 @@ use std::{
 };
 
 mod color;
+mod mono_font;
 mod motion;
 mod registry;
 mod schema;
@@ -117,6 +118,11 @@ pub struct Theme {
     /// - macOS: `Menlo`
     /// - Windows: `Consolas`
     /// - Linux: `DejaVu Sans Mono`
+    ///
+    /// When that default is not installed, [`Theme::change`] swaps it for the
+    /// first installed alternative (`Monaco`, `Cascadia Mono`, `Noto Sans Mono`
+    /// and the like) and finally `.SystemUIFont`, so a missing font cannot
+    /// crash text layout. A family set explicitly is used as-is.
     pub mono_font_family: SharedString,
     /// The monospace font size for the application, default is 13px.
     pub mono_font_size: Pixels,
@@ -258,7 +264,7 @@ impl Theme {
             cx.set_global(theme);
         }
 
-        let theme = {
+        {
             let theme = cx.global_mut::<Theme>();
             theme.mode = mode;
             if mode.is_dark() {
@@ -266,8 +272,9 @@ impl Theme {
             } else {
                 theme.apply_config(&theme.light_theme.clone());
             }
-            theme.clone()
-        };
+        }
+        mono_font::resolve_default_mono_font(cx);
+        let theme = cx.global::<Theme>().clone();
 
         let base_theme = theme.base_theme();
         cx.set_global(base_theme);
@@ -632,14 +639,7 @@ impl From<&ThemeColor> for Theme {
             transparent: Hsla::transparent_black(),
             font_family: ".SystemUIFont".into(),
             font_size: px(16.),
-            mono_font_family: if cfg!(target_os = "macos") {
-                // https://en.wikipedia.org/wiki/Menlo_(typeface)
-                "Menlo".into()
-            } else if cfg!(target_os = "windows") {
-                "Consolas".into()
-            } else {
-                "DejaVu Sans Mono".into()
-            },
+            mono_font_family: mono_font::default_mono_font_family(),
             mono_font_size: px(13.),
             radius: px(6.),
             radius_lg: px(8.),

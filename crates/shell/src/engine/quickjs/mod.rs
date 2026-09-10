@@ -25,12 +25,13 @@ use anyhow::{Context as _, Result, anyhow};
 use gpui::{App, AppContext as _, ClickEvent, Entity, Global, Subscription, WeakEntity, Window};
 use rquickjs::{
     Array, Context as JsContext, Ctx, Error as JsError, Exception, FromJs, Function, Object,
-    Persistent, Result as JsResult, Runtime as JsRuntime, Value,
+    Persistent, Result as JsResult, Value,
     function::{Args as JsArgs, Func, Opt, This},
     loader::{BuiltinResolver, ImportAttributes, Loader, ModuleLoader, Resolver},
     module::Declared,
     module::{Declarations, Exports, Module, ModuleDef},
 };
+use rquickjs_jit::{JitConfig, JitRuntime};
 use smallvec::SmallVec;
 
 use crate::{
@@ -237,6 +238,27 @@ mod retained_component_state_tests {
                 .to_string()
                 .contains("cannot be updated during render")
         );
+    }
+}
+
+#[cfg(test)]
+mod jit_suspension_tests {
+    use super::*;
+
+    #[test]
+    fn nested_suspension_preserves_the_outer_state() {
+        let runtime = ShellRuntime::new_isolated().unwrap();
+
+        runtime
+            .with_jit_suspended(|| {
+                assert!(runtime.js_runtime.jit().is_suspended());
+                runtime.with_jit_suspended(|| Ok(()))?;
+                assert!(runtime.js_runtime.jit().is_suspended());
+                Ok(())
+            })
+            .unwrap();
+
+        assert!(!runtime.js_runtime.jit().is_suspended());
     }
 }
 
@@ -830,6 +852,7 @@ pub struct ViewObject {
     #[allow(dead_code)] // Its drop owns the resolver registration lifetime.
     module_lease: Option<ApplicationModuleLease>,
     application: Option<Rc<ApplicationGeneration>>,
+    jit_warm: Rc<Cell<bool>>,
 }
 
 impl std::fmt::Debug for ViewObject {
@@ -844,6 +867,7 @@ impl ViewObject {
             value,
             module_lease: None,
             application: None,
+            jit_warm: Rc::new(Cell::new(false)),
         }
     }
 
@@ -1009,10 +1033,8 @@ mod window_api;
 /// One module per crate that provides the capability, so an import says which
 /// layer a script depends on: `gpui-base`'s components come from `"gpui-base"`,
 /// `gpui-fps`'s overlay from `"gpui-fps"`, and `"gpui-kit"` carries only what GPUI
-/// itself and this runtime provide. A name belongs to exactly one of them —
-/// nothing is re-exported for convenience, because a name reachable from two
-/// specifiers stops saying anything about where it came from, and the next
-/// layer to arrive would have to be told apart from the ones already here.
+/// itself and this runtime provide. `"gpui"` is an explicit compatibility alias
+/// for that module; other names belong to exactly one layer.
 ///
 /// Anything installed onto `globalThis.__gpui` must be listed in one of these
 /// or no `import { … }` will see it.
@@ -1025,6 +1047,10 @@ pub(crate) mod exports {
         "div",
         "svg",
         "image",
+        // GPUI's own lazy lists. Base's virtual lists live in `gpui-base`;
+        // these are GPUI's, and are exported where `div` is.
+        "list",
+        "uniform_list",
         "PathBuilder",
         "Background",
     ];
@@ -1195,6 +1221,7 @@ macro_rules! builtin_modules {
 
 builtin_modules![
     (GpuiModule, "gpui-kit", exports::GPUI),
+    (GpuiAliasModule, "gpui", exports::GPUI),
     (GpuiBaseModule, "gpui-base", exports::GPUI_BASE),
     (GpuiShellModule, "gpui-shell", exports::GPUI_SHELL),
     (GpuiFpsModule, "gpui-fps", exports::GPUI_FPS),
@@ -1342,7 +1369,38 @@ pub struct ShellRuntime {
     next_application_generation: Cell<u64>,
     /// Held so the context stays alive, and so the module loader can be scoped
     /// to an application directory when one is loaded.
-    js_runtime: JsRuntime,
+    js_runtime: JitRuntime,
+}
+
+struct JitSuspension<'a> {
+    jit: &'a rquickjs_jit::Jit,
+    active: bool,
+}
+
+impl JitSuspension<'_> {
+    fn begin(jit: &rquickjs_jit::Jit) -> Result<JitSuspension<'_>> {
+        let active = !jit.is_suspended();
+        if active {
+            jit.suspend()?;
+        }
+        Ok(JitSuspension { jit, active })
+    }
+
+    fn finish(mut self) -> Result<()> {
+        if self.active {
+            self.jit.resume()?;
+        }
+        self.active = false;
+        Ok(())
+    }
+}
+
+impl Drop for JitSuspension<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = self.jit.resume();
+        }
+    }
 }
 
 impl Drop for ShellRuntime {
@@ -1376,6 +1434,17 @@ struct RuntimeGlobal(Weak<ShellRuntime>);
 impl Global for RuntimeGlobal {}
 
 impl ShellRuntime {
+    fn with_jit_suspended<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+        if !self.js_runtime.has_jit() {
+            return operation();
+        }
+        let jit = self.js_runtime.jit();
+        let suspension = JitSuspension::begin(jit)?;
+        let result = operation();
+        suspension.finish()?;
+        result
+    }
+
     /// Loads an application's JavaScript entry without exposing engine values.
     ///
     /// Resolution, declaration refresh, module generations, capabilities and
@@ -1454,6 +1523,19 @@ impl ShellRuntime {
         Self::new_isolated_with_components_and_dependency_store(
             FrozenComponentRegistry::default(),
             GitDependencyStore::for_user()?,
+            shell_jit_config()?,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_isolated_interpreter() -> Result<Rc<Self>> {
+        let js_runtime = JitRuntime::builder()
+            .build_interpreter()
+            .map_err(|error| anyhow!("failed to start the JavaScript interpreter: {error}"))?;
+        Self::new_isolated_with_components_dependency_store_and_runtime(
+            FrozenComponentRegistry::default(),
+            GitDependencyStore::for_user()?,
+            js_runtime,
         )
     }
 
@@ -1461,6 +1543,7 @@ impl ShellRuntime {
         Self::new_isolated_with_components_and_dependency_store(
             components,
             GitDependencyStore::for_user()?,
+            shell_jit_config()?,
         )
     }
 
@@ -1471,16 +1554,37 @@ impl ShellRuntime {
         Self::new_isolated_with_components_and_dependency_store(
             FrozenComponentRegistry::default(),
             dependency_store,
+            shell_jit_config()?,
         )
     }
 
     fn new_isolated_with_components_and_dependency_store(
         components: FrozenComponentRegistry,
         dependency_store: GitDependencyStore,
+        jit_config: JitConfig,
     ) -> Result<Rc<Self>> {
+        let js_runtime = JitRuntime::builder()
+            .config(jit_config)
+            .build()
+            .map_err(|error| anyhow!("failed to start the JavaScript JIT runtime: {error}"))?;
+        Self::new_isolated_with_components_dependency_store_and_runtime(
+            components,
+            dependency_store,
+            js_runtime,
+        )
+    }
+
+    fn new_isolated_with_components_dependency_store_and_runtime(
+        components: FrozenComponentRegistry,
+        dependency_store: GitDependencyStore,
+        js_runtime: JitRuntime,
+    ) -> Result<Rc<Self>> {
+        let jit_enabled = js_runtime.has_jit();
+        if jit_enabled {
+            js_runtime.jit().suspend()?;
+        }
         let entities = EntityStore::try_new()
             .ok_or_else(|| anyhow!("gpui-shell entity store id space is exhausted"))?;
-        let js_runtime = JsRuntime::new().map_err(js_setup_error)?;
         let context = JsContext::full(&js_runtime).map_err(js_setup_error)?;
 
         let app_modules = AppModules::default();
@@ -1551,7 +1655,11 @@ impl ShellRuntime {
             js_runtime,
         });
 
-        runtime.install_globals()?;
+        let installed = runtime.install_globals();
+        if jit_enabled {
+            runtime.js_runtime.jit().resume()?;
+        }
+        installed?;
         Ok(runtime)
     }
 
@@ -1855,6 +1963,13 @@ impl ShellRuntime {
         self.arena.borrow_mut().reset();
     }
 
+    /// Returns JIT diagnostic counters for the real-process acceptance
+    /// benchmark.
+    #[cfg(test)]
+    pub(crate) fn jit_metrics_for_benchmark(&self) -> rquickjs_jit::JitMetrics {
+        self.js_runtime.metrics()
+    }
+
     /// A reading of the two counters, taken now.
     ///
     /// The host gets the reading rather than the instrument: `Metrics` is the
@@ -2044,21 +2159,24 @@ impl ShellRuntime {
         module_lease: Option<ApplicationModuleLease>,
         application: Option<Rc<ApplicationGeneration>>,
     ) -> Result<ViewType> {
-        self.with_js(|ctx| {
-            let (module, promise) = rquickjs::Module::declare(ctx.clone(), name, source)?.eval()?;
-            promise.finish::<()>()?;
+        self.with_jit_suspended(|| {
+            self.with_js(|ctx| {
+                let (module, promise) =
+                    rquickjs::Module::declare(ctx.clone(), name, source)?.eval()?;
+                promise.finish::<()>()?;
 
-            let default: Value = module.get("default")?;
-            let Some(class) = default.as_object() else {
-                return Err(Exception::throw_message(
-                    ctx,
-                    "main.js must `export default` a class that extends View",
-                ));
-            };
-            Ok(ViewType {
-                value: Persistent::save(ctx, class.clone()),
-                module_lease,
-                application,
+                let default: Value = module.get("default")?;
+                let Some(class) = default.as_object() else {
+                    return Err(Exception::throw_message(
+                        ctx,
+                        "main.js must `export default` a class that extends View",
+                    ));
+                };
+                Ok(ViewType {
+                    value: Persistent::save(ctx, class.clone()),
+                    module_lease,
+                    application,
+                })
             })
         })
     }
@@ -2781,14 +2899,17 @@ impl ShellRuntime {
     }
 
     fn construct(&self, view_type: &ViewType) -> Result<ViewObject> {
-        self.with_js(|ctx| {
-            let class = view_type.value.clone().restore(ctx)?;
-            let construct: Function = ctx.globals().get("__construct")?;
-            let instance: Object = construct.call((class,))?;
-            Ok(ViewObject {
-                value: Persistent::save(ctx, instance),
-                module_lease: view_type.module_lease.clone(),
-                application: view_type.application.clone(),
+        self.with_jit_suspended(|| {
+            self.with_js(|ctx| {
+                let class = view_type.value.clone().restore(ctx)?;
+                let construct: Function = ctx.globals().get("__construct")?;
+                let instance: Object = construct.call((class,))?;
+                Ok(ViewObject {
+                    value: Persistent::save(ctx, instance),
+                    module_lease: view_type.module_lease.clone(),
+                    application: view_type.application.clone(),
+                    jit_warm: Rc::new(Cell::new(false)),
+                })
             })
         })
     }
@@ -2842,14 +2963,16 @@ impl ShellRuntime {
         initial_props: Option<Persistent<Value<'static>>>,
     ) -> Result<()> {
         self.initializing_views.borrow_mut().push(object.clone());
-        let initialized = self.with_js(|ctx| {
-            let instance = object.value.clone().restore(ctx)?;
-            let initialize: Function = ctx.globals().get("__initialize")?;
-            let props = match initial_props {
-                Some(props) => props.restore(ctx)?,
-                None => Value::new_undefined(ctx.clone()),
-            };
-            initialize.call::<_, ()>((instance, props))
+        let initialized = self.with_jit_suspended(|| {
+            self.with_js(|ctx| {
+                let instance = object.value.clone().restore(ctx)?;
+                let initialize: Function = ctx.globals().get("__initialize")?;
+                let props = match initial_props {
+                    Some(props) => props.restore(ctx)?,
+                    None => Value::new_undefined(ctx.clone()),
+                };
+                initialize.call::<_, ()>((instance, props))
+            })
         });
         let initializing = self.initializing_views.borrow_mut().pop();
         debug_assert!(initializing.is_some());
@@ -2900,21 +3023,32 @@ impl ShellRuntime {
         self.arena.borrow_mut().reset();
         let callbacks = self.callbacks.borrow_mut().begin();
 
-        let (root, policy) = self.metrics.time_script_render(|| {
-            let (_guard, generation) = scope::enter_with_application(
-                self,
-                window,
-                cx,
-                ScopePhase::Render,
-                view.clone(),
-                policy.clone(),
-                object.application_generation(),
-            );
-            (self.call_render(object, generation), policy)
-        });
+        let first_render = !object.jit_warm.get();
+        let render = || {
+            self.metrics.time_script_render(|| {
+                let (_guard, generation) = scope::enter_with_application(
+                    self,
+                    window,
+                    cx,
+                    ScopePhase::Render,
+                    view.clone(),
+                    policy.clone(),
+                    object.application_generation(),
+                );
+                (self.call_render(object, generation), policy)
+            })
+        };
+        let (root, policy) = if first_render {
+            self.with_jit_suspended(|| Ok(render()))?
+        } else {
+            render()
+        };
 
         let root = match root {
-            Ok(root) => root,
+            Ok(root) => {
+                object.jit_warm.set(true);
+                root
+            }
             Err(error) => {
                 self.callbacks.borrow_mut().abort();
                 self.arena.borrow_mut().reset();
@@ -2957,6 +3091,7 @@ impl ShellRuntime {
     /// tests that never paint a frame. This runs the script; to read a
     /// description that has already been built, use
     /// [`RenderSnapshot::debug_tree`] instead — that path never enters the VM.
+    #[cfg(test)]
     pub(crate) fn render_to_spec(
         self: &Rc<Self>,
         object: &ViewObject,
@@ -4832,6 +4967,21 @@ impl ShellRuntime {
     }
 }
 
+fn shell_jit_config() -> Result<JitConfig> {
+    let builder = JitConfig::builder();
+
+    // Debug builds exercise many short-lived runtimes concurrently. Keep them on
+    // the interpreter tier: native compilation currently crashes inside the JIT
+    // backend on Linux and Windows under that workload. Release builds retain the
+    // production thresholds and continue to tier hot functions up to native code.
+    #[cfg(debug_assertions)]
+    let builder = builder.call_threshold(u32::MAX).loop_threshold(u32::MAX);
+
+    builder
+        .build()
+        .map_err(|error| anyhow!("invalid JavaScript JIT configuration: {error}"))
+}
+
 /// Resolves and loads an application's own modules, and nothing else.
 ///
 /// `FileResolver` from rquickjs is not usable here: it tests candidate paths
@@ -5331,21 +5481,27 @@ globalThis.__gpui = (() => {
   // The argument checks are here rather than only on the Rust side because a
   // list built with the pieces in the wrong order — a render function where the
   // sizes go — would otherwise fail as a type error naming neither.
-  const virtualList = (build, name) => (id, item_count, item_sizes, get_key, render) => {
-    const shape = name + "(id, item_count, item_sizes, get_key, render)";
+  // The three checks every lazy list makes. Only the render hint differs:
+  // `list` is called per item, the other two per visible range.
+  const checkListArgs = (shape, item_count, get_key, render, renderHint) => {
     if (!Number.isInteger(item_count) || item_count < 0) {
       throw new TypeError(shape + " needs a whole, non-negative item_count");
-    }
-    if (typeof render !== "function") {
-      throw new TypeError(
-        shape + " needs a render function; it is called once per visible range, not once per item",
-      );
     }
     if (typeof get_key !== "function") {
       throw new TypeError(
         shape + " needs get_key(index) to return each item's stable string key",
       );
     }
+    if (typeof render !== "function") {
+      throw new TypeError(shape + " needs a render function; it is called " + renderHint);
+    }
+  };
+
+  const RANGE_HINT = "once per visible range, not once per item";
+
+  const virtualList = (build, name) => (id, item_count, item_sizes, get_key, render) => {
+    const shape = name + "(id, item_count, item_sizes, get_key, render)";
+    checkListArgs(shape, item_count, get_key, render, RANGE_HINT);
     if (Array.isArray(item_sizes) && item_sizes.length !== item_count) {
       throw new TypeError(
         shape + " was given " + item_sizes.length + " item sizes for " + item_count +
@@ -5353,6 +5509,31 @@ globalThis.__gpui = (() => {
       );
     }
     return element(build(String(id), item_count, item_sizes, get_key, render));
+  };
+
+  // `list` and `uniform_list`: GPUI's own lazy lists. Both cross the boundary
+  // the way a virtual list does -- one renderer per visible range -- so a
+  // `list` renderer written per item is folded into a range here, once, rather
+  // than teaching the host a second calling convention.
+  const lazyList = (build, name, perItem) => (id, item_count, get_key, render) => {
+    const shape = name + "(id, item_count, get_key, render)";
+    checkListArgs(
+      shape,
+      item_count,
+      get_key,
+      render,
+      perItem ? "once per item on screen, with the item's index" : RANGE_HINT,
+    );
+    const describe = perItem
+      ? (range, cx) => {
+          const items = [];
+          for (let index = range.start; index < range.end; index++) {
+            items.push(render(index, cx));
+          }
+          return items;
+        }
+      : render;
+    return element(build(String(id), item_count, get_key, describe));
   };
 
   const finiteNonNegative = (value, name) => {
@@ -6552,6 +6733,8 @@ globalThis.__gpui = (() => {
     // would put one number per row across the boundary on every render.
     v_virtual_list: virtualList(__v_virtual_list, "v_virtual_list"),
     h_virtual_list: virtualList(__h_virtual_list, "h_virtual_list"),
+    list: lazyList(__list, "list", true),
+    uniform_list: lazyList(__uniform_list, "uniform_list", false),
     VirtualListScrollHandle: { new: () => virtualScrollHandle(__virtual_scroll_new()) },
     Scrollbar: {
       new: (id) => element(__scrollbar(String(id))),
@@ -6758,7 +6941,6 @@ impl ShellRuntime {
                 "open",
                 "default_open",
                 "overlay_closable",
-                "continuous",
                 "with_item_to_measure_index",
             ]
             .into_iter()
@@ -7059,6 +7241,18 @@ impl ShellRuntime {
                 "__h_virtual_list",
                 runtime.clone(),
                 gpui::Axis::Horizontal,
+            )?;
+            list_constructor(
+                &globals,
+                "__list",
+                runtime.clone(),
+                crate::spec::ListKind::Measured,
+            )?;
+            list_constructor(
+                &globals,
+                "__uniform_list",
+                runtime.clone(),
+                crate::spec::ListKind::Uniform,
             )?;
             text_constructor(&globals, "__popup", runtime.clone(), Component::Popup)?;
             text_constructor(&globals, "__select", runtime.clone(), Component::Select)?;
@@ -7760,7 +7954,6 @@ impl ShellRuntime {
             | "default_open"
             | "overlay_closable"
             | "anchor"
-            | "continuous"
             | "frame_budget"
             | "mouse_button"
             | "open_delay"
@@ -7813,7 +8006,6 @@ impl ShellRuntime {
                     "default_open" => "default_open",
                     "overlay_closable" => "overlay_closable",
                     "anchor" => "anchor",
-                    "continuous" => "continuous",
                     "frame_budget" => "frame_budget",
                     "mouse_button" => "mouse_button",
                     "open_delay" => "open_delay",
@@ -8467,6 +8659,61 @@ impl<'js> FromJs<'js> for ItemKeyResolver {
 /// lists cannot bypass it.
 const MAX_VIRTUAL_ITEMS_PER_RENDER: usize = 1_000_000;
 
+/// The guard both lazy-list constructors run before they allocate anything.
+///
+/// The phase check is why an item renderer cannot build a list: callbacks
+/// belong to the snapshot that registered them, and by the time a renderer
+/// runs that generation is closed, so a callback pushed there is one no lookup
+/// could ever match. The budget claim has to come before the size table,
+/// because a count the script fat-fingered is an allocation measured in
+/// gigabytes.
+fn guard_lazy_list(
+    ctx: &Ctx<'_>,
+    runtime: &Weak<ShellRuntime>,
+    count: usize,
+) -> JsResult<Rc<ShellRuntime>> {
+    if scope::current_phase() == Some(ScopePhase::Layout) {
+        return Err(Exception::throw_type(
+            ctx,
+            "a list cannot be built from inside another list's item renderer: its own \
+             renderer would belong to no render pass and would never be called. Describe \
+             the nested list from the view's render() instead",
+        ));
+    }
+    let store = upgrade(runtime, ctx)?;
+    if !store
+        .arena
+        .borrow_mut()
+        .claim_virtual_items(count, MAX_VIRTUAL_ITEMS_PER_RENDER)
+    {
+        return Err(Exception::throw_type(
+            ctx,
+            &format!(
+                "the lists in one render may describe at most \
+                 {MAX_VIRTUAL_ITEMS_PER_RENDER} items in total"
+            ),
+        ));
+    }
+    Ok(store)
+}
+
+/// Files a lazy list's two script functions against the open generation.
+fn register_item_callbacks(
+    store: &Rc<ShellRuntime>,
+    get_key: ItemKeyResolver,
+    render: ItemRenderer,
+) -> (CallbackId, CallbackId) {
+    let entry = |value| {
+        store.callbacks.borrow_mut().push(CallbackEntry {
+            value,
+            view: scope::current_view().map(|view| view.downgrade()),
+            application: scope::current_application_generation(),
+            registered_in: scope::current_generation(),
+        })
+    };
+    (entry(get_key.0), entry(render.0))
+}
+
 /// `v_virtual_list` and `h_virtual_list`.
 ///
 /// The item renderer is registered as an ordinary callback, so it belongs to
@@ -8490,24 +8737,7 @@ fn virtual_list_constructor(
                   get_key: ItemKeyResolver,
                   render: ItemRenderer|
                   -> JsResult<SpecId> {
-                if scope::current_phase() == Some(ScopePhase::Layout) {
-                    return Err(Exception::throw_type(
-                        &ctx,
-                        "a virtual list cannot be built from inside another list's item                          renderer: its own renderer would belong to no render pass and would                          never be called. Describe the nested list from the view's render()                          instead",
-                    ));
-                }
-                if !upgrade(&runtime, &ctx)?
-                    .arena
-                    .borrow_mut()
-                    .claim_virtual_items(count, MAX_VIRTUAL_ITEMS_PER_RENDER)
-                {
-                    return Err(Exception::throw_type(
-                        &ctx,
-                        &format!(
-                            "the virtual lists in one render may describe at most                              {MAX_VIRTUAL_ITEMS_PER_RENDER} items in total"
-                        ),
-                    ));
-                }
+                let store = guard_lazy_list(&ctx, &runtime, count)?;
 
                 let extent = |value: f64| -> JsResult<gpui::Size<gpui::Pixels>> {
                     if !value.is_finite() || value < 0.0 {
@@ -8561,19 +8791,7 @@ fn virtual_list_constructor(
                     }
                 };
 
-                let store = upgrade(&runtime, &ctx)?;
-                let get_key = store.callbacks.borrow_mut().push(CallbackEntry {
-                    value: get_key.0,
-                    view: scope::current_view().map(|view| view.downgrade()),
-                    application: scope::current_application_generation(),
-                    registered_in: scope::current_generation(),
-                });
-                let callback = store.callbacks.borrow_mut().push(CallbackEntry {
-                    value: render.0,
-                    view: scope::current_view().map(|view| view.downgrade()),
-                    application: scope::current_application_generation(),
-                    registered_in: scope::current_generation(),
-                });
+                let (get_key, callback) = register_item_callbacks(&store, get_key, render);
                 Ok(store.push_node(Component::VirtualList(Rc::new(
                     crate::spec::VirtualListSpec::new(
                         id,
@@ -8583,6 +8801,41 @@ fn virtual_list_constructor(
                         callback,
                     ),
                 ))))
+            },
+        ),
+    )
+}
+
+/// `list` and `uniform_list`.
+///
+/// The same registration as a virtual list's, and confined for the same
+/// reasons: the renderer belongs to the snapshot being built, and cannot be
+/// registered from inside another list's item renderer. The item budget is
+/// claimed too, because `gpui::list` keeps one entry per item whether or not
+/// the item is ever drawn.
+fn list_constructor(
+    globals: &Object<'_>,
+    name: &str,
+    runtime: Weak<ShellRuntime>,
+    kind: crate::spec::ListKind,
+) -> JsResult<()> {
+    globals.set(
+        name,
+        Func::from(
+            move |ctx: Ctx<'_>,
+                  id: String,
+                  count: usize,
+                  get_key: ItemKeyResolver,
+                  render: ItemRenderer|
+                  -> JsResult<SpecId> {
+                let store = guard_lazy_list(&ctx, &runtime, count)?;
+
+                let (get_key, callback) = register_item_callbacks(&store, get_key, render);
+                Ok(
+                    store.push_node(Component::List(Rc::new(crate::spec::ListSpec::new(
+                        id, kind, count, get_key, callback,
+                    )))),
+                )
             },
         ),
     )
@@ -9718,6 +9971,20 @@ mod module_lifecycle_tests {
     use crate::dependencies::{GitDependencyStore, MaterializedDependency};
     use std::collections::BTreeMap;
     use std::process::Command;
+
+    #[test]
+    fn gpui_module_exports_div() {
+        let runtime = ShellRuntime::new_isolated().expect("runtime");
+        runtime
+            .load_source(
+                "gpui-import.js",
+                r#"
+import { div, View } from "gpui";
+export default class Panel extends View { render() { return div(); } }
+"#,
+            )
+            .expect("gpui is an importable built-in module");
+    }
 
     #[test]
     fn registrations_for_the_same_root_are_generation_scoped_and_leased() {
@@ -11060,6 +11327,14 @@ export default class BrokenChild extends View {
 
 #[cfg(test)]
 mod reserved_element_method_tests {
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_runtimes_stay_on_the_interpreter_tier() {
+        let config = super::shell_jit_config().expect("JIT configuration");
+        assert_eq!(config.call_threshold(), u32::MAX);
+        assert_eq!(config.loop_threshold(), u32::MAX);
+    }
+
     /// `typings.rs` withholds these from a registered component that does not
     /// declare them. If the engine started accepting a fourth, the declarations
     /// would keep offering it on every component and the call would throw.

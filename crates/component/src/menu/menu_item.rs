@@ -4,6 +4,7 @@ use gpui::{
     ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement as _,
     StyleRefinement, Styled, Window, prelude::FluentBuilder as _,
 };
+use gpui_base::TestSupportExt as _;
 use smallvec::SmallVec;
 
 /// 항목 호버/선택 막대 불투명도 — 불투명하면 반투명 메뉴 표면 위에 불투명 띠가 얹혀
@@ -98,6 +99,7 @@ impl RenderOnce for MenuItemElement {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         h_flex()
             .id(self.id)
+            .test_support()
             .role(Role::MenuItem)
             .when_some(self.aria_label, |this, label| this.aria_label(label))
             .aria_selected(self.selected)
