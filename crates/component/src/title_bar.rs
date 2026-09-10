@@ -193,9 +193,17 @@ impl ControlIcon {
 }
 
 impl RenderOnce for ControlIcon {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let is_linux = cfg!(target_os = "linux");
-        let is_windows = cfg!(target_os = "windows");
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        // Windows normally lets the OS drive these buttons: `window_control_area` marks the
+        // bounds and the non-client hit test turns a click into minimize/maximize/close.
+        // In fullscreen that path is gone -- gpui skips `WM_NCHITTEST` there and strips the
+        // caption/system-menu styles -- so the areas go inert and the buttons look alive
+        // (hover still paints) while doing nothing. Drive the click ourselves in that case,
+        // the way Linux always does.
+        let is_fullscreen = window.is_fullscreen();
+        let handles_click =
+            cfg!(target_os = "linux") || (cfg!(target_os = "windows") && is_fullscreen);
+        let hit_test_area = cfg!(target_os = "windows") && !is_fullscreen;
         let hover_fg = self.hover_fg(cx);
         let hover_bg = self.hover_bg(cx);
         let active_bg = self.active_bg(cx);
@@ -217,10 +225,10 @@ impl RenderOnce for ControlIcon {
             .text_color(cx.theme().foreground)
             .hover(|style| style.bg(hover_bg).text_color(hover_fg))
             .active(|style| style.bg(active_bg).text_color(hover_fg))
-            .when(is_windows, |this| {
+            .when(hit_test_area, |this| {
                 this.window_control_area(self.window_control_area())
             })
-            .when(is_linux, |this| {
+            .when(handles_click, |this| {
                 this.on_mouse_down(MouseButton::Left, move |_, window, cx| {
                     window.prevent_default();
                     cx.stop_propagation();
@@ -229,7 +237,16 @@ impl RenderOnce for ControlIcon {
                     cx.stop_propagation();
                     match icon {
                         Self::Minimize => window.minimize_window(),
-                        Self::Restore | Self::Maximize => window.zoom_window(),
+                        // Fullscreen reads this button as "restore": leave fullscreen and
+                        // fall back to whatever the window was before. Zooming instead
+                        // would fight the fullscreen bounds the platform is holding.
+                        Self::Restore | Self::Maximize => {
+                            if window.is_fullscreen() {
+                                window.toggle_fullscreen();
+                            } else {
+                                window.zoom_window();
+                            }
+                        }
                         Self::Close { .. } => {
                             if let Some(f) = on_close_window.clone() {
                                 f(&ClickEvent::default(), window, cx);
@@ -283,7 +300,9 @@ impl RenderOnce for WindowControls {
                 this.child(ControlIcon::minimize())
             })
             .when(supported.maximize, |this| {
-                this.child(if window.is_maximized() {
+                // Fullscreen is "more than maximized", so it offers restore as well --
+                // `is_maximized` is false while the window is fullscreen.
+                this.child(if window.is_maximized() || window.is_fullscreen() {
                     ControlIcon::restore()
                 } else {
                     ControlIcon::maximize()
