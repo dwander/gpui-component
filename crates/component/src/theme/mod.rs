@@ -21,6 +21,7 @@ mod mono_font;
 mod motion;
 mod registry;
 mod schema;
+mod system_font;
 mod theme_color;
 
 pub use color::*;
@@ -108,6 +109,11 @@ pub struct Theme {
 
     pub mode: ThemeMode,
     /// The font family for the application, default is `.SystemUIFont`.
+    ///
+    /// When the system font resolves to an installed fallback family instead
+    /// of itself (Linux desktops without the family GPUI maps it to),
+    /// [`Theme::change`] names that family here, so every text lookup hits
+    /// the font cache. A family set explicitly is used as-is.
     pub font_family: SharedString,
     /// The base font size for the application, default is 16px.
     pub font_size: Pixels,
@@ -152,12 +158,6 @@ pub struct Theme {
     /// The notification setting.
     #[serde(skip)]
     pub notification: NotificationSettings,
-    /// Tile grid size, default is 4px.
-    pub tile_grid_size: Pixels,
-    /// The shadow of the tile panel.
-    pub tile_shadow: bool,
-    /// The border radius of the tile panel, default is 0px.
-    pub tile_radius: Pixels,
     /// The list settings.
     pub list: ListSettings,
     /// The sheet settings.
@@ -273,6 +273,7 @@ impl Theme {
                 theme.apply_config(&theme.light_theme.clone());
             }
         }
+        system_font::resolve_default_font(cx);
         mono_font::resolve_default_mono_font(cx);
         let theme = cx.global::<Theme>().clone();
 
@@ -649,9 +650,6 @@ impl From<&ThemeColor> for Theme {
             focus_ring: true,
             scrollbar_mode: ScrollbarMode::default(),
             notification: NotificationSettings::default(),
-            tile_grid_size: px(8.),
-            tile_shadow: true,
-            tile_radius: px(0.),
             list: ListSettings::default(),
             colors: *colors,
             tokens: ThemeTokens::from(colors),

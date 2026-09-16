@@ -695,6 +695,7 @@ impl RenderOnce for Button {
                         })
                     })
             })
+            .line_height(relative(1.25))
             .refine_style(&instance_style);
 
         // The explicit name wins: it exists precisely for the cases where the
@@ -730,7 +731,6 @@ impl RenderOnce for Button {
                         .min_w_0()
                         .whitespace_nowrap()
                         .text_ellipsis()
-                        .line_height(relative(1.))
                         .child(label),
                 )
             })
@@ -1176,12 +1176,14 @@ impl ButtonVariant {
                 }
             }
             Self::Custom(colors) => colors.hover.into(),
-            Self::Ghost => if cx.theme().mode.is_dark() {
-                cx.theme().secondary.lighten(0.1).opacity(0.8)
-            } else {
-                cx.theme().secondary.darken(0.1).opacity(0.8)
+            Self::Ghost => {
+                let accent: Background = cx.theme().tokens.accent.into();
+                if cx.theme().mode.is_dark() {
+                    accent.opacity(0.5)
+                } else {
+                    accent
+                }
             }
-            .into(),
             Self::Link => cx.theme().transparent.into(),
             Self::Text => cx.theme().transparent.into(),
         };
@@ -1190,6 +1192,7 @@ impl ButtonVariant {
         let fg = match self {
             Self::Link => cx.theme().link_hover,
             Self::Text => cx.theme().foreground,
+            Self::Ghost => cx.theme().accent_foreground,
             _ => self.text_color(outline, cx),
         };
 
@@ -1228,12 +1231,7 @@ impl ButtonVariant {
                     cx.theme().tokens.button_secondary_active.into()
                 }
             }
-            Self::Ghost => if cx.theme().mode.is_dark() {
-                cx.theme().secondary.lighten(0.2).opacity(0.8)
-            } else {
-                cx.theme().secondary.darken(0.2).opacity(0.8)
-            }
-            .into(),
+            Self::Ghost => cx.theme().tokens.button_active.into(),
             Self::Danger => {
                 if outline {
                     self.outline_background(ButtonStyleState::Active, cx)

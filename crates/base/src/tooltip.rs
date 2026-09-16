@@ -91,7 +91,11 @@ pub enum TooltipTransition {
 }
 
 /// Per-window tooltip provider and overlay.
+///
+/// Show requests are ignored on iOS and Android, where touch input must not
+/// open hover tooltips. This does not control GPUI's native `.tooltip()` API.
 pub struct TooltipOverlay {
+    enabled: bool,
     content: Option<TooltipRequest>,
     previous_bounds: Option<Bounds<Pixels>>,
     epoch: usize,
@@ -110,6 +114,7 @@ pub struct TooltipOverlay {
 impl TooltipOverlay {
     pub fn new() -> Self {
         Self {
+            enabled: !crate::is_mobile(),
             content: None,
             previous_bounds: None,
             epoch: 0,
@@ -154,6 +159,11 @@ impl TooltipOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Gate both delayed display and the immediate grace-period switch.
+        // Keep this in Base so every managed component shares the policy.
+        if !self.enabled {
+            return;
+        }
         if self.suppressed {
             return;
         }
@@ -327,5 +337,34 @@ mod tests {
     #[test]
     fn tooltip_priority_exceeds_popup_layer() {
         assert!(TOOLTIP_PRIORITY > crate::POPUP_PRIORITY);
+    }
+
+    #[gpui::test]
+    fn disabled_provider_ignores_delayed_and_immediate_requests(cx: &mut gpui::TestAppContext) {
+        let state = cx.update(|cx| {
+            cx.new(|_| TooltipOverlay {
+                enabled: false,
+                ..TooltipOverlay::new()
+            })
+        });
+        let cx = cx.add_empty_window();
+        for had_recent_tooltip in [false, true] {
+            cx.update(|window, cx| {
+                state.update(cx, |tooltip, cx| {
+                    tooltip.had_recent_tooltip = had_recent_tooltip;
+                    tooltip.request_show(
+                        TooltipRequest::new(bounds(0., 0., 20., 20.), |_, _| {
+                            panic!("disabled tooltips must not build content")
+                        }),
+                        window,
+                        cx,
+                    );
+                    assert!(tooltip.content.is_none());
+                    assert!(tooltip.show_task.is_none());
+                    assert!(tooltip.hide_task.is_none());
+                    assert_eq!(tooltip.animation_epoch, 0);
+                });
+            });
+        }
     }
 }

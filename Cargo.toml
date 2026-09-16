@@ -23,7 +23,6 @@ members = [
     "examples/large-text",
     "examples/markdown",
     "examples/stream-markdown",
-    "examples/tiles",
     "examples/window_title",
     "examples/dialog_overlay",
     "examples/webview",
@@ -33,6 +32,7 @@ members = [
     "examples/sidebar",
     "examples/text_max_lines",
     "examples/text_selection",
+    "examples/touch_selection",
     "examples/root_borderless",
     "examples/table_in_scrollable",
     "examples/markdown_table",
@@ -69,7 +69,8 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["fo
 gpui_web = { git = "https://github.com/zed-industries/zed" }
 gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
 reqwest_client = { git = "https://github.com/zed-industries/zed" }
-sum-tree = { package = "gpui-pre-sum-tree", version = "0.3.1" }
+# sum-tree 는 gpui 에 의존하지 않아 이중 링크 위험이 없다 — 업스트림 범프를 따른다.
+sum-tree = { package = "gpui-pre-sum-tree", version = "0.3.5" }
 reqwest = { package = "gpui-pre-reqwest", version = "0.12.15", default-features = false, features = [
     "charset",
     "http2",
