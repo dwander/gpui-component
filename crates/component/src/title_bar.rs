@@ -43,6 +43,7 @@ pub struct TitleBar {
     style: StyleRefinement,
     children: SmallVec<[AnyElement; 1]>,
     on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>,
+    hide_maximize: bool,
 }
 
 impl TitleBar {
@@ -52,6 +53,7 @@ impl TitleBar {
             style: StyleRefinement::default(),
             children: SmallVec::new(),
             on_close_window: None,
+            hide_maximize: false,
         }
     }
 
@@ -88,6 +90,18 @@ impl TitleBar {
             app_owns_titlebar_drag: true,
             ..Default::default()
         }
+    }
+
+    /// Hide the maximize/restore control, leaving only minimize and close.
+    ///
+    /// For windows whose size is owned by the app rather than the user -- a preview window
+    /// sized to its content, for instance -- maximizing produces a layout the app never
+    /// intended, so the control is better left out than left broken.
+    ///
+    /// Windows and Linux only: macOS draws its own traffic lights, which this cannot reach.
+    pub fn hide_maximize(mut self, hide: bool) -> Self {
+        self.hide_maximize = hide;
+        self
     }
 
     /// Add custom for close window event, default is None, then click X button will call `window.remove_window()`.
@@ -264,6 +278,7 @@ impl RenderOnce for ControlIcon {
 #[derive(IntoElement)]
 struct WindowControls {
     on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>,
+    hide_maximize: bool,
 }
 
 impl RenderOnce for WindowControls {
@@ -299,7 +314,7 @@ impl RenderOnce for WindowControls {
             .when(supported.minimize, |this| {
                 this.child(ControlIcon::minimize())
             })
-            .when(supported.maximize, |this| {
+            .when(supported.maximize && !self.hide_maximize, |this| {
                 // Fullscreen is "more than maximized", so it offers restore as well --
                 // `is_maximized` is false while the window is fullscreen.
                 this.child(if window.is_maximized() || window.is_fullscreen() {
@@ -418,6 +433,7 @@ impl RenderOnce for TitleBar {
                 )
                 .child(WindowControls {
                     on_close_window: self.on_close_window,
+                    hide_maximize: self.hide_maximize,
                 }),
         )
     }
