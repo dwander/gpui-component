@@ -50,10 +50,17 @@ pub const FROSTED_BLUR: f32 = 5.;
 /// 유리 테두리(림) 두께(px). 1px 짜리 중성 보더는 표면과 그림자 사이에 아무 여백이 없어
 /// **그림자가 테두리에서 곧바로 시작되는 것처럼** 보인다(가장자리가 지저분해진다). 조금 두꺼운
 /// 밝은 띠를 두르면 그 띠가 표면과 그림자를 갈라, 두께가 있는 유리 모서리로 읽힌다.
-pub const FROSTED_RIM: f32 = 2.5;
+///
+/// ⚠ **정수라야 한다.** 레이아웃 값은 정수로 반올림되므로 소수는 화면에 그대로 나가지 않는다 —
+/// 2.5 는 2px 로 깎였고(실측), 오프셋까지 따로 반올림되던 구조에서는 표면과 띠 사이가 1px
+/// 벌어지기까지 했다. 두께를 바꾸려면 정수로 바꾼다.
+pub const FROSTED_RIM: f32 = 3.;
 /// 림의 불투명도 — 흰 띠라 표면이 어두운 다크에서는 옅어도 또렷하고, 표면이 이미 밝은
 /// 라이트에서는 거의 흰색이어야 띠로 읽힌다.
-const FROSTED_RIM_ALPHA_DARK: f32 = 0.16;
+///
+/// 다크가 0.16 일 때는 띠 **안쪽 1px 이 그림자에 먹혀** 띠가 한 픽셀처럼 얇아 보였다 — 띠 아래
+/// 그림자는 표면에 가까울수록 진해지는데, 옅은 흰색은 그 기울기를 덮지 못한다(실측).
+const FROSTED_RIM_ALPHA_DARK: f32 = 0.26;
 const FROSTED_RIM_ALPHA_LIGHT: f32 = 0.8;
 /// 표면 모서리 반경(px).
 pub const FROSTED_RADIUS: f32 = 8.;
@@ -67,6 +74,25 @@ pub fn frosted_rim(cx: &App) -> Hsla {
         FROSTED_RIM_ALPHA_LIGHT
     };
     hsla(0., 0., 1., alpha)
+}
+
+/// 표면 **바깥**에 두르는 유리 림 — [`ThemeStyled::frosted_surface_style`] 이 자식으로 깐다.
+///
+/// 표면은 보더를 갖지 않으므로(그 자리가 이 링이다) 절대 배치의 기준이 곧 표면 박스다.
+/// 링 바깥면이 표면에서 [`FROSTED_RIM`] 만큼 떨어지고 안쪽면은 표면에 맞물린다.
+/// 흐름에서 빠져 있어(`absolute`) 표면의 레이아웃·크기에는 영향을 주지 않는다.
+fn frosted_rim_ring(cx: &App) -> gpui::Div {
+    let outset = px(FROSTED_RIM);
+    div()
+        .flex_none()
+        .absolute()
+        .top(-outset)
+        .left(-outset)
+        .right(-outset)
+        .bottom(-outset)
+        .border(px(FROSTED_RIM))
+        .border_color(frosted_rim(cx))
+        .rounded(px(FROSTED_RADIUS + FROSTED_RIM))
 }
 
 /// 검정 그림자 레이어 하나 — y 오프셋·blur·spread·alpha 로 생성.
@@ -233,12 +259,26 @@ pub trait ThemeStyled: Styled + Sized {
     /// `base` 는 표면색 토큰(메뉴는 `popover`, 대화상자는 `background`). 그림자는 표면마다
     /// 높이가 달라 호출부가 얹는다 — 드롭 그림자는 요소 박스를 파내고 그려지므로(gpui)
     /// 반투명 배경이 자기 그림자에 물들지 않는다.
-    fn frosted_surface_style(self, base: Hsla, cx: &App) -> Self {
+    ///
+    /// ⚠ **림은 표면 바깥에 그린다.** gpui 의 보더는 배경이 깔린 박스 *안쪽*에 그려져, 밝은
+    /// 띠가 제 표면 톤에 물든다 — 다크 테마라도 뒤 사진이 밝으면 표면이 밝아지고 띠는 회색으로
+    /// 묻혀 테두리가 사라진다(같은 문제를 말풍선에서 실측하고 고쳤다). 박스 바깥에 링 요소를
+    /// 하나 두면 그 아래는 그림자와 뒤 화면뿐이라 표면색과 무관해진다 — [`frosted_rim_ring`].
+    ///
+    /// 띠가 나간 만큼 **보더도 뺀다.** 자리만 투명하게 남기면 그 두께가 표면 몫이 되어, 띠는
+    /// 그대로인데 어두운 면만 사방으로 커진다 — 띠가 얇아 보이는 원인이다(실측). 링이 옛 보더
+    /// 자리에 그대로 들어가므로 바깥 윤곽·내용 위치·전체 크기는 이 변경 전과 같다.
+    ///
+    /// ⚠ 링은 [`FROSTED_RADIUS`] 를 기준으로 그려진다 — 이 뒤에 `rounded*` 로 반경을 바꾸면
+    /// 링만 옛 반경에 남는다(바꿔야 하면 이 호출보다 **앞**에서).
+    fn frosted_surface_style(self, base: Hsla, cx: &App) -> Self
+    where
+        Self: ParentElement,
+    {
         self.bg(base.opacity(FROSTED_BG_ALPHA))
             .backdrop_blur(px(FROSTED_BLUR))
-            .border(px(FROSTED_RIM))
-            .border_color(frosted_rim(cx))
             .rounded(px(FROSTED_RADIUS))
+            .child(frosted_rim_ring(cx))
     }
 
     /// Round this element as far as its size allows — a circle if it is square,
