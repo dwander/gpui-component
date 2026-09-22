@@ -55,6 +55,12 @@ pub const FROSTED_BLUR: f32 = 5.;
 /// 2.5 는 2px 로 깎였고(실측), 오프셋까지 따로 반올림되던 구조에서는 표면과 띠 사이가 1px
 /// 벌어지기까지 했다. 두께를 바꾸려면 정수로 바꾼다.
 pub const FROSTED_RIM: f32 = 3.;
+/// **그림자를 얹지 않는** 표면의 림 두께(px) — 떠 있는 컨트롤 바 같은 것.
+///
+/// [`FROSTED_RIM`] 이 두꺼운 근거는 "띠가 표면과 그림자를 갈라 준다" 인데, 그림자가 없으면
+/// 그 근거가 통째로 사라진다 — 갈라 줄 것이 없는 자리에 3px 짜리 밝은 띠만 남아 그냥
+/// 두꺼운 테두리로 읽힌다. 그런 표면은 유리 모서리를 한 줄로만 긋는다.
+pub const FROSTED_RIM_THIN: f32 = 1.;
 /// 림의 불투명도 — 흰 띠라 표면이 어두운 다크에서는 옅어도 또렷하고, 표면이 이미 밝은
 /// 라이트에서는 거의 흰색이어야 띠로 읽힌다.
 ///
@@ -81,8 +87,8 @@ pub fn frosted_rim(cx: &App) -> Hsla {
 /// 표면은 보더를 갖지 않으므로(그 자리가 이 링이다) 절대 배치의 기준이 곧 표면 박스다.
 /// 링 바깥면이 표면에서 [`FROSTED_RIM`] 만큼 떨어지고 안쪽면은 표면에 맞물린다.
 /// 흐름에서 빠져 있어(`absolute`) 표면의 레이아웃·크기에는 영향을 주지 않는다.
-fn frosted_rim_ring(cx: &App) -> gpui::Div {
-    let outset = px(FROSTED_RIM);
+fn frosted_rim_ring(rim: f32, cx: &App) -> gpui::Div {
+    let outset = px(rim);
     div()
         .flex_none()
         .absolute()
@@ -90,9 +96,9 @@ fn frosted_rim_ring(cx: &App) -> gpui::Div {
         .left(-outset)
         .right(-outset)
         .bottom(-outset)
-        .border(px(FROSTED_RIM))
+        .border(px(rim))
         .border_color(frosted_rim(cx))
-        .rounded(px(FROSTED_RADIUS + FROSTED_RIM))
+        .rounded(px(FROSTED_RADIUS + rim))
 }
 
 /// 검정 그림자 레이어 하나 — y 오프셋·blur·spread·alpha 로 생성.
@@ -275,10 +281,19 @@ pub trait ThemeStyled: Styled + Sized {
     where
         Self: ParentElement,
     {
+        self.frosted_surface_style_with_rim(base, FROSTED_RIM, cx)
+    }
+
+    /// 림 두께를 지정하는 갈래 — 그림자를 얹지 않는 표면은 [`FROSTED_RIM_THIN`] 을 넘긴다.
+    /// 나머지(배경 알파·블러·반경)는 [`ThemeStyled::frosted_surface_style`] 과 같은 값이다.
+    fn frosted_surface_style_with_rim(self, base: Hsla, rim: f32, cx: &App) -> Self
+    where
+        Self: ParentElement,
+    {
         self.bg(base.opacity(FROSTED_BG_ALPHA))
             .backdrop_blur(px(FROSTED_BLUR))
             .rounded(px(FROSTED_RADIUS))
-            .child(frosted_rim_ring(cx))
+            .child(frosted_rim_ring(rim, cx))
     }
 
     /// Round this element as far as its size allows — a circle if it is square,
