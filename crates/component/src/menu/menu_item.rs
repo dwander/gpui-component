@@ -18,6 +18,8 @@ pub(crate) struct MenuItemElement {
     aria_label: Option<SharedString>,
     style: StyleRefinement,
     disabled: bool,
+    /// 비활성이어도 흐리게 하지 않는다 — 구분선처럼 누를 수 없을 뿐 흐려질 글자가 없는 항목.
+    undimmed: bool,
     selected: bool,
     on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     on_hover: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
@@ -34,6 +36,7 @@ impl MenuItemElement {
             aria_label: None,
             style: StyleRefinement::default(),
             disabled: false,
+            undimmed: false,
             selected: false,
             on_click: None,
             on_hover: None,
@@ -56,6 +59,13 @@ impl MenuItemElement {
     /// Set the disabled state of the MenuItem.
     pub(crate) fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// 비활성(누를 수 없음)이어도 흐리게 그리지 않는다 — 구분선용. 구분선은 선 색 자체가
+    /// 디자인이라 비활성 흐림(0.45)을 받으면 새긴 선의 하이라이트가 사라진다.
+    pub(crate) fn undimmed(mut self) -> Self {
+        self.undimmed = true;
         self
     }
 
@@ -134,7 +144,7 @@ impl RenderOnce for MenuItemElement {
                     .on_click(on_click)
                 })
             })
-            .when(self.disabled, |this| {
+            .when(self.disabled && !self.undimmed, |this| {
                 // 비활성 항목은 muted 색 + 불투명도를 낮춰 텍스트·아이콘을 함께 어둡게 → 활성과 뚜렷이 구분.
                 this.text_color(cx.theme().muted_foreground).opacity(0.45)
             })

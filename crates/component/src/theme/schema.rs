@@ -472,6 +472,12 @@ pub struct ThemeConfigColors {
     /// Text color for Popover.
     #[serde(rename = "popover.foreground")]
     pub popover_foreground: Option<SharedString>,
+    /// 메뉴 구분선의 위 1px (새긴 선의 어두운 줄). 기본은 `border`.
+    #[serde(rename = "menu.separator")]
+    pub menu_separator: Option<SharedString>,
+    /// 메뉴 구분선의 아래 1px (새긴 선의 하이라이트). 기본은 `border`.
+    #[serde(rename = "menu.separator_highlight")]
+    pub menu_separator_highlight: Option<SharedString>,
     /// Primary background color.
     #[serde(rename = "primary.background")]
     pub primary: Option<SharedString>,
@@ -977,6 +983,8 @@ impl ThemeColor {
         apply_background_color!(list_hover, fallback = self.accent.opacity(0.6));
         apply_background_color!(popover, fallback = tokens.background);
         apply_color!(popover_foreground, fallback = self.foreground);
+        apply_color!(menu_separator, fallback = self.border);
+        apply_color!(menu_separator_highlight, fallback = self.border);
         apply_background_color!(progress_bar, fallback = tokens.primary);
         apply_color!(ring, fallback = self.blue);
         apply_background_color!(scrollbar, fallback = tokens.background);

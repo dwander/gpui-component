@@ -1292,14 +1292,19 @@ impl PopupMenu {
             .when_some(item.a11y_label(), |this, label| this.aria_label(label));
 
         match item {
+            // 새긴 선 — 어두운 줄 1px(`menu_separator`) 아래 하이라이트 1px(`menu_separator_highlight`).
+            // 한 요소의 변마다 색을 달리 줄 수 없어 두 줄을 세로로 쌓는다. 두 토큰 모두 기본이
+            // 테두리색이라 정하지 않으면 예전의 2px 테두리색 선과 같다.
             PopupMenuItem::Separator => this
                 .h_auto()
                 .p_0()
                 .my_0p5()
                 .mx_neg_1()
-                .border_b(px(2.))
-                .border_color(cx.theme().border)
-                .disabled(true),
+                .flex_col()
+                .child(div().h(px(1.)).w_full().bg(cx.theme().menu_separator))
+                .child(div().h(px(1.)).w_full().bg(cx.theme().menu_separator_highlight))
+                .disabled(true)
+                .undimmed(),
             PopupMenuItem::Label(label) => this.disabled(true).cursor_default().child(
                 h_flex()
                     .cursor_default()

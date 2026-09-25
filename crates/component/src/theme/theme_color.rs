@@ -197,6 +197,11 @@ pub struct ThemeColor {
     pub popover: Hsla,
     /// Text color for Popover.
     pub popover_foreground: Hsla,
+    /// 메뉴 구분선의 위 1px (새긴 선의 어두운 줄). 기본은 테두리색.
+    pub menu_separator: Hsla,
+    /// 메뉴 구분선의 아래 1px — 어두운 줄 아래에 붙어 **새긴 선**이 된다. 기본은 테두리색이라
+    /// 두 토큰 모두 정하지 않으면 예전처럼 2px 테두리색 선이다.
+    pub menu_separator_highlight: Hsla,
     /// Primary background color.
     pub primary: Hsla,
     /// Active primary background color.
@@ -471,6 +476,8 @@ define_theme_tokens! {
     muted_foreground,
     popover,
     popover_foreground,
+    menu_separator,
+    menu_separator_highlight,
     primary,
     primary_active,
     primary_foreground,
