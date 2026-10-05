@@ -61,6 +61,18 @@ cx.subscribe(&notes, |this, state, event: &InputEvent, cx| {
 `insert`, `replace`, `cursor_position`, `soft_wrap`, `searchable`, and
 `submit_on_enter` are available on `TextareaState`.
 
+## Sizes
+
+```rust
+Textarea::new(&notes).large()
+Textarea::new(&notes) // medium (default)
+Textarea::new(&notes).small()
+```
+
+The size changes the text size and the padding around the text together. It does
+not set the height: use `h` for a fixed height, and let `rows` or `auto_grow`
+decide the height of a growing textarea.
+
 ## Appearance
 
 ```rust
@@ -94,6 +106,8 @@ Textarea::new(&state)
 
 Import `InputToken` from `gpui_kit::component::input` and `IconName` from
 `gpui_kit::component`. A token wraps onto the next line as a whole, and auto-grow adjusts the textarea
-height to fit. Put line breaks in the text between tokens. See
+height to fit. Put line breaks in the text between tokens. Use `on_token_hover`
+to show a tooltip or preview without selecting or editing; disabled tokens never
+report hover entry; disabling a hovered token sends its exit. See
 [Input: atomic inline tokens](./input.md#atomic-inline-tokens) for editing,
 activation, draft persistence, mode restrictions and JavaScript APIs.

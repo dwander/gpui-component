@@ -36,6 +36,7 @@ members = [
     "examples/table_in_scrollable",
     "examples/markdown_table",
     "examples/ai_recipes",
+    "examples/speech",
     "crates/shell",
     "crates/shell/rquickjs-compat",
     "crates/component-shell",
@@ -47,15 +48,15 @@ publish = false
 edition = "2024"
 
 [workspace.dependencies]
-gpui-kit = { path = "crates/kit", version = "0.6.5" }
-gpui-component = { path = "crates/component", version = "0.6.5" }
-gpui-base = { path = "crates/base", version = "0.6.5" }
-gpui-component-macros = { path = "crates/component-macros", version = "0.6.5" }
-gpui-kit-assets = { path = "crates/assets", version = "0.6.5" }
-gpui-fps = { path = "crates/fps", version = "0.6.5" }
-gpui-shell = { path = "crates/shell", version = "0.6.5" }
-gpui-wry = { path = "crates/webview", version = "0.6.5" }
-gpui-component-shell = { path = "crates/component-shell", version = "0.6.5" }
+gpui-kit = { path = "crates/kit", version = "0.7.1" }
+gpui-component = { path = "crates/component", version = "0.7.1" }
+gpui-base = { path = "crates/base", version = "0.7.1" }
+gpui-component-macros = { path = "crates/component-macros", version = "0.7.1" }
+gpui-kit-assets = { path = "crates/assets", version = "0.7.1" }
+gpui-fps = { path = "crates/fps", version = "0.7.1" }
+gpui-shell = { path = "crates/shell", version = "0.7.1" }
+gpui-wry = { path = "crates/webview", version = "0.7.1" }
+gpui-component-shell = { path = "crates/component-shell", version = "0.7.1" }
 story = { path = "crates/story" }
 
 # [PiCell 포크 패치] 업스트림은 이 5개를 crates.io 의 `gpui-pre-*`(longbridge 가 재배포하는
@@ -70,7 +71,7 @@ gpui_web = { git = "https://github.com/zed-industries/zed" }
 gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
 reqwest_client = { git = "https://github.com/zed-industries/zed" }
 # sum-tree 는 gpui 에 의존하지 않아 이중 링크 위험이 없다 — 업스트림 범프를 따른다.
-sum-tree = { package = "gpui-pre-sum-tree", version = "=0.3.6" }
+sum-tree = { package = "gpui-pre-sum-tree", version = "=0.3.8" }
 reqwest = { package = "gpui-pre-reqwest", version = "=0.12.15", default-features = false, features = [
     "charset",
     "http2",
@@ -85,7 +86,7 @@ anyhow = "1"
 instant = { version = "0.1", features = ["wasm-bindgen"] }
 log = "0.4"
 lsp-types = { version = "0.97.0", features = ["proposed"] }
-notify = "7.0.0"
+notify = "8.2.0"
 raw-window-handle = "0.6.2"
 ropey = { version = "=2.0.0-beta.1", features = [
     "metric_chars",

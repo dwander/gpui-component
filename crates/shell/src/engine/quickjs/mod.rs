@@ -7048,6 +7048,7 @@ impl ShellRuntime {
                 "on_change",
                 "token",
                 "on_token_click",
+                "on_token_hover",
                 "on_open_change",
                 "on_confirm",
                 "on_dismiss",
@@ -7147,11 +7148,14 @@ impl ShellRuntime {
                         "markdown" => crate::spec::TextViewFormat::Markdown,
                         _ => return Err(Exception::throw_type(&ctx, "TextView format must be html or markdown")),
                     };
-                    Ok(upgrade(&text_view_runtime, &ctx)?.push_node(Component::TextView {
-                        id: id.into(),
-                        text: text.into(),
-                        format,
-                    }))
+                    Ok(upgrade(&text_view_runtime, &ctx)?.push_node(Component::TextView(
+                        crate::spec::TextViewSpec {
+                            id: id.into(),
+                            text: text.into(),
+                            format,
+                            policy: crate::scope::policy(),
+                        },
+                    )))
                 }),
             )?;
             text_constructor(&globals, "__svg", runtime.clone(), Component::Svg)?;
@@ -8023,6 +8027,7 @@ impl ShellRuntime {
             | "on_change"
             | "token"
             | "on_token_click"
+            | "on_token_hover"
             | "on_open_change"
             | "on_confirm"
             | "on_dismiss"
@@ -9971,6 +9976,7 @@ fn callback_op_name(method: &str) -> Option<&'static str> {
         "on_change" => "on_change",
         "token" => "token",
         "on_token_click" => "on_token_click",
+        "on_token_hover" => "on_token_hover",
         "on_confirm" => "on_confirm",
         "on_dismiss" => "on_dismiss",
         "on_step" => "on_step",

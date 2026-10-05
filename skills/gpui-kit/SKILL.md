@@ -133,6 +133,7 @@ fetch the component's `.md` doc.
 | `Editor`      | `input::{Editor, EditorState}`                  | Stateful. Code editor, `tree-sitter` feature |
 | `NumberInput` | `input::{NumberInput, NumberInputEvent}`        | Stateful. Numeric with step                  |
 | `OtpInput`    | `input::OtpInput`                               | Stateful. One-time password                  |
+| `SpeechButton` | `speech::{SpeechButton, SpeechState}`          | Stateful. Dictation, `speech` feature        |
 | `Select`      | `select::{Select, SelectState}`                 | Stateful. Dropdown picker                    |
 | `Combobox`    | `combobox::{Combobox, ComboboxState}`           | Stateful. Searchable select                  |
 | `Checkbox`    | `checkbox::Checkbox`                            | Stateless. `on_click` receives `&bool`       |
@@ -144,6 +145,7 @@ fetch the component's `.md` doc.
 | `Stepper`     | `stepper::Stepper`                              | Stateless. Multi-step progress               |
 | `ColorPicker` | `color_picker::{ColorPicker, ColorPickerState}` | Stateful.                                    |
 | `DatePicker`  | `date_picker::{DatePicker, DatePickerState}`    | Stateful.                                    |
+| `TimeField`   | `time_field::{TimeField, TimeFieldState}`       | Stateful. Time of day, 24/12-hour            |
 | `Calendar`    | `calendar::{Calendar, CalendarState}`           | Stateful. Inline month view                  |
 | `Form`        | `form::{v_form, h_form, field}`                 | Layout container for form fields             |
 

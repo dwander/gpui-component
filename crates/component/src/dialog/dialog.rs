@@ -3,7 +3,7 @@ use gpui_base::TestSupportExt as _;
 use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
-    Action, AnyElement, App, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement,
+    Action, Anchor, AnyElement, App, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement,
     IntoElement, ParentElement, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window,
     WindowControlArea, anchored, div, hsla, point, prelude::FluentBuilder, px,
 };
@@ -581,18 +581,20 @@ impl RenderOnce for Dialog {
                 window_paddings.left + window_paddings.right,
                 window_paddings.top + window_paddings.bottom,
             );
-        // The dialog keeps this much of the viewport clear on the sides and
-        // below it, so a small window shrinks the surface instead of the
-        // surface running off the window. The top keeps `margin_top` (a tenth
-        // of the viewport by default) plus the 16px step of each stacked layer.
+        // The dialog keeps this much of the viewport clear around its edges,
+        // so a small window shrinks the surface instead of letting it run off
+        // the window. A dialog that fits keeps `margin_top` (a tenth of the
+        // viewport by default); an overflowing one is snapped up to this edge
+        // margin so that the preferred offset does not waste usable height.
         let margin = cx.theme().spacing_tokens().lg;
-        let y = self.props.margin_top.unwrap_or(view_size.height / 10.) + px(layer_ix as f32 * 16.);
+        let layer_offset = px(layer_ix as f32 * 16.);
+        let y = self.props.margin_top.unwrap_or(view_size.height / 10.) + layer_offset;
         let width = self
             .props
             .width
             .min((view_size.width - margin * 2.).max(px(0.)));
         let x = (view_size.width - width) / 2.;
-        let max_height = (view_size.height - y - margin).max(px(0.));
+        let max_height = (view_size.height - margin * 2. - layer_offset).max(px(0.));
 
         let base_size = window.text_style().font_size;
         let rem_size = window.rem_size();
@@ -670,106 +672,108 @@ impl RenderOnce for Dialog {
                                 }
                             })
                             .popup(
-                                v_flex()
-                                    .id(layer_ix)
-                                    .test_support()
-                                    .debug_selector(move || format!("dialog-{layer_ix}"))
-                                    // 프로스티드 표면 — 메뉴/컨텍스트 메뉴와 같은 재질(반투명 +
-                                    // 뒤 블러 + 유리 림). 그림자는 아래에서 한 단 높게 얹는다.
-                                    // (상류의 bg/border_1/rounded 를 이 한 줄이 대신한다)
-                                    .frosted_surface_style(*cx.theme().tokens.background, cx)
-                                    .min_h_24()
-                                    .pt(paddings.top)
-                                    .pb(paddings.bottom)
-                                    .gap(paddings.top.max(px(8.)))
-                                    .refine_style(&self.style)
-                                    .px_0()
-                                    // There style is high priority, can't be overridden.
-                                    .absolute()
-                                    .occlude()
-                                    .relative()
-                                    .left(x)
-                                    .top(y)
-                                    .w(width)
-                                    .when_some(self.props.max_width, |this, w| this.max_w(w))
-                                    .max_h(max_height)
-                                    .child(
-                                        v_flex()
-                                            .flex_1()
-                                            .overflow_hidden()
-                                            .gap_y_2()
-                                            .when_some(self.header, |this, header| {
-                                                this.child(
-                                                    div()
-                                                        .pl(paddings.left)
-                                                        .pr(paddings.right)
-                                                        .child(header),
-                                                )
-                                            })
-                                            .when_some(self.title, |this, title| {
-                                                this.child(
-                                                    DialogTitle::new()
-                                                        .pl(paddings.left)
-                                                        .pr(paddings.right)
-                                                        .child(title),
-                                                )
-                                            })
-                                            .when_some(self.content_builder, |this, builder| {
-                                                this.child(builder(
-                                                    DialogContent::new()
-                                                        .gap(paddings.bottom)
-                                                        .pl(paddings.left)
-                                                        .pr(paddings.right),
-                                                    window,
-                                                    cx,
-                                                ))
-                                            })
-                                            .when(!self.children.is_empty(), |this| {
-                                                this.child(
-                                                    div().flex_1().overflow_hidden().child(
-                                                        // Body
-                                                        v_flex()
-                                                            .size_full()
-                                                            .overflow_y_scrollbar()
+                                gpui_base::Positioner::corner(
+                                    Anchor::TopLeft,
+                                    point(window_paddings.left + x, window_paddings.top + y),
+                                )
+                                .margin(margin)
+                                .child(
+                                    v_flex()
+                                        .id(layer_ix)
+                                        .test_support()
+                                        .debug_selector(move || format!("dialog-{layer_ix}"))
+                                        // 프로스티드 표면 — 메뉴/컨텍스트 메뉴와 같은 재질(반투명 +
+                                        // 뒤 블러 + 유리 림). 그림자는 아래에서 한 단 높게 얹는다.
+                                        // (상류의 bg/border_1/rounded 를 이 한 줄이 대신한다)
+                                        .frosted_surface_style(*cx.theme().tokens.background, cx)
+                                        .min_h_24()
+                                        .pt(paddings.top)
+                                        .pb(paddings.bottom)
+                                        .gap(paddings.top.max(px(8.)))
+                                        .refine_style(&self.style)
+                                        .px_0()
+                                        .occlude()
+                                        .w(width)
+                                        .when_some(self.props.max_width, |this, w| this.max_w(w))
+                                        .max_h(max_height)
+                                        .child(
+                                            v_flex()
+                                                .flex_1()
+                                                .overflow_hidden()
+                                                .gap_y_2()
+                                                .when_some(self.header, |this, header| {
+                                                    this.child(
+                                                        div()
                                                             .pl(paddings.left)
                                                             .pr(paddings.right)
-                                                            .children(self.children),
-                                                    ),
-                                                )
-                                            }),
-                                    )
-                                    .when_some(self.footer, |this, footer| {
-                                        this.child(
-                                            div()
-                                                .pl(paddings.left)
-                                                .pr(paddings.right)
-                                                .child(footer),
+                                                            .child(header),
+                                                    )
+                                                })
+                                                .when_some(self.title, |this, title| {
+                                                    this.child(
+                                                        DialogTitle::new()
+                                                            .pl(paddings.left)
+                                                            .pr(paddings.right)
+                                                            .child(title),
+                                                    )
+                                                })
+                                                .when_some(self.content_builder, |this, builder| {
+                                                    this.child(builder(
+                                                        DialogContent::new()
+                                                            .gap(paddings.bottom)
+                                                            .pl(paddings.left)
+                                                            .pr(paddings.right),
+                                                        window,
+                                                        cx,
+                                                    ))
+                                                })
+                                                .when(!self.children.is_empty(), |this| {
+                                                    this.child(
+                                                        div().flex_1().overflow_hidden().child(
+                                                            // Body
+                                                            v_flex()
+                                                                .size_full()
+                                                                .overflow_y_scrollbar()
+                                                                .pl(paddings.left)
+                                                                .pr(paddings.right)
+                                                                .children(self.children),
+                                                        ),
+                                                    )
+                                                }),
                                         )
-                                    })
-                                    .children(self.props.close_button.then(|| {
-                                        let top = (paddings.top - px(10.)).max(px(8.));
-                                        let right = (paddings.right - px(10.)).max(px(8.));
+                                        .when_some(self.footer, |this, footer| {
+                                            this.child(
+                                                div()
+                                                    .pl(paddings.left)
+                                                    .pr(paddings.right)
+                                                    .child(footer),
+                                            )
+                                        })
+                                        .children(self.props.close_button.then(|| {
+                                            let top = (paddings.top - px(10.)).max(px(8.));
+                                            let right = (paddings.right - px(10.)).max(px(8.));
 
-                                        gpui_base::DialogClose::new()
-                                            .absolute()
-                                            .top(top)
-                                            .right(right)
-                                            .trigger(|button| {
-                                                Button::new("close")
-                                                    .with_base(button)
-                                                    .small()
-                                                    .ghost()
-                                                    .icon(IconName::Close)
-                                            })
-                                    }))
-                                    // 등장 애니메이션 없음 — 최종 크기·불투명도로 바로 나타난다.
-                                    // 확대(`appear_scale`)든 페이드(`opacity`)든 요소를 오프스크린
-                                    // 레이어로 격리해 합성하는데, 격리가 끝나는 순간 버튼·글자 색이
-                                    // 눈에 띄게 바뀐다. 확인 대화상자는 빠른 작업의 길목이라
-                                    // 그 값을 치를 자리가 아니다. (스프링·이징 헬퍼는 남아 있으니
-                                    // 격리 없이 등장을 그릴 방법이 생기면 다시 붙이면 된다.)
-                                    .shadow(shadow)
-                                    .text_selection_scope(selection_scope),
+                                            gpui_base::DialogClose::new()
+                                                .absolute()
+                                                .top(top)
+                                                .right(right)
+                                                .trigger(|button| {
+                                                    Button::new("close")
+                                                        .with_base(button)
+                                                        .small()
+                                                        .ghost()
+                                                        .icon(IconName::Close)
+                                                })
+                                        }))
+                                        // 등장 애니메이션 없음 — 최종 크기·불투명도로 바로 나타난다.
+                                        // 확대(`appear_scale`)든 페이드(`opacity`)든 요소를 오프스크린
+                                        // 레이어로 격리해 합성하는데, 격리가 끝나는 순간 버튼·글자 색이
+                                        // 눈에 띄게 바뀐다. 확인 대화상자는 빠른 작업의 길목이라
+                                        // 그 값을 치를 자리가 아니다. (스프링·이징 헬퍼는 남아 있으니
+                                        // 격리 없이 등장을 그릴 방법이 생기면 다시 붙이면 된다.)
+                                        .shadow(shadow)
+                                        .text_selection_scope(selection_scope),
+                                ),
                             ),
                     ),
             )
@@ -840,8 +844,9 @@ pub(crate) mod tests {
     }
 
     /// A dialog wider and taller than the window must shrink to the viewport
-    /// instead of running off both edges, and its footer must still be inside
-    /// the surface rather than clipped below it.
+    /// instead of running off both edges. It also gives up the usual top
+    /// offset so that space is available to its content, while its footer
+    /// remains inside the surface rather than clipped below it.
     #[gpui::test]
     fn a_dialog_larger_than_the_window_stays_inside_it(cx: &mut TestAppContext) {
         let viewport = size(px(400.), px(300.));
@@ -865,7 +870,7 @@ pub(crate) mod tests {
             bounds.bottom() <= viewport.height - margin,
             "the dialog ran off the bottom: {bounds:?}"
         );
-        assert_eq!(bounds.origin.y, viewport.height / 10.);
+        assert_eq!(bounds.origin.y, margin);
         assert!(
             footer.bottom() <= bounds.bottom(),
             "the footer was clipped below the dialog: footer {footer:?}, dialog {bounds:?}"

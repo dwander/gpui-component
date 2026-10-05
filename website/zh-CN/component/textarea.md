@@ -59,6 +59,16 @@ cx.subscribe(&notes, |this, state, event: &InputEvent, cx| {
 `TextareaState` 还提供 `insert`、`replace`、`cursor_position`、
 `soft_wrap`、`searchable` 和 `submit_on_enter`。
 
+## 尺寸
+
+```rust
+Textarea::new(&notes).large()
+Textarea::new(&notes) // medium（默认）
+Textarea::new(&notes).small()
+```
+
+尺寸会同时改变文字大小和文本四周的内边距，但不决定高度：固定高度用 `h` 设置，随内容增高的 Textarea 由 `rows` 或 `auto_grow` 决定高度。
+
 ## 外观
 
 ```rust
@@ -83,4 +93,4 @@ Textarea::new(&state)
     .token(|token, _, _| InputToken::new(token).icon(IconName::File))
 ```
 
-从 `gpui_kit::component::input` 导入 `InputToken`，从 `gpui_kit::component` 导入 `IconName`。token 会整块换到下一行，自动增高会相应调整输入框高度。换行符应放在 token 之间的普通文本中。编辑、激活、草稿保存、模式限制和 JavaScript API 见 [Input：原子行内 token](./input.md#原子行内-token)。
+从 `gpui_kit::component::input` 导入 `InputToken`，从 `gpui_kit::component` 导入 `IconName`。token 会整块换到下一行，自动增高会相应调整输入框高度。换行符应放在 token 之间的普通文本中。使用 `on_token_hover` 可在不选中、不编辑的情况下显示提示或预览；禁用 token 不会上报悬停进入事件；禁用已悬停的 token 时会发送离开事件。编辑、激活、草稿保存、模式限制和 JavaScript API 见 [Input：原子行内 token](./input.md#原子行内-token)。

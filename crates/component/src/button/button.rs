@@ -1,13 +1,13 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use crate::ThemeStyled as _;
 use crate::{
     ActiveTheme, Colorize as _, Disableable, ElementExt as _, Icon, Placement, RoleOverride,
     Selectable, Sizable, Size, StyleSized, StyledExt,
     button::ButtonIcon,
     h_flex,
     select::Caret,
+    styled::{FocusLine, focus_style},
     tooltip::{ManagedTooltipExt as _, Tooltip},
 };
 use gpui::{
@@ -43,6 +43,10 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("space", ActivateButton { space: true }, Some(CONTEXT)),
     ]);
 }
+
+/// Ink of the focus line a filled button draws inside its fill: its own
+/// foreground, which the theme already keeps legible against that fill.
+const FOCUS_LINE_OPACITY: f32 = 0.6;
 
 #[derive(Default, Clone, Copy)]
 pub enum ButtonRounded {
@@ -643,6 +647,14 @@ impl RenderOnce for Button {
             _ => self.size,
         });
         let has_content = self.icon.is_some() || self.label.is_some() || !children.is_empty();
+        // Only borderless variants use this; the others tint their border.
+        let focus_line = if style.no_padding() {
+            FocusLine::Outside
+        } else if style.is_ghost() {
+            FocusLine::Edge
+        } else {
+            FocusLine::Inside(normal_style.fg.opacity(FOCUS_LINE_OPACITY))
+        };
 
         let focus_handle = window
             .use_keyed_state(self.id.clone(), cx, |_, cx| cx.focus_handle())
@@ -929,12 +941,8 @@ impl RenderOnce for Button {
                     );
                 })
         })
-        // 버튼은 테마 스위치와 무관하게 링을 그린다 — 스위치가 떨어뜨리는 "테두리 물들이기"
-        // 는 물들일 테두리가 있어야 하는데, 채움 변형(Primary·Danger…)은 테두리를 아예
-        // 그리지 않아 포커스가 통째로 안 보이게 된다. 스위치는 테두리를 가진 입력칸만
-        // 조용하게 만드는 용도다.
         .when(is_focused && self.focus_ring_enabled, |this| {
-            this.focus_ring_style_always(window, cx)
+            focus_style(this, focus_line, window, cx)
         })
     }
 }

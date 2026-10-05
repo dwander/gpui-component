@@ -52,6 +52,16 @@ export const stories = [
     api: "NumberInput",
   }),
   pendingStory({
+    id: "time-field",
+    title: "TimeField",
+    group: "Inputs",
+    rustStory: "TimeFieldStory",
+    description: "Segmented time-of-day input.",
+    states: ["default", "disabled"],
+    availability: "pending",
+    api: "TimeField",
+  }),
+  pendingStory({
     id: "otp-input",
     title: "OtpInput",
     group: "Inputs",
@@ -100,6 +110,16 @@ export const stories = [
     states: ["single value", "range", "disabled"],
     availability: "pending",
     api: "Slider",
+  }),
+  pendingStory({
+    id: "speech",
+    title: "Speech",
+    group: "Inputs",
+    rustStory: "SpeechStory",
+    description: "Dictation through a Rust speech recognizer.",
+    states: ["idle", "recording", "unsupported"],
+    availability: "infrastructure",
+    api: "SpeechButton",
   }),
   pendingStory({
     id: "color-picker",

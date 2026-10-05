@@ -954,6 +954,12 @@
     },
     {
       "source": "ui",
+      "name": "speech",
+      "classification": "infrastructure",
+      "explanation": "Speech input depends on an application-supplied SpeechRecognizer or the `speech` feature's microphone and system recognizer, which the frozen catalog cannot construct from script; it is not registered as a component yet."
+    },
+    {
+      "source": "ui",
       "name": "spinner",
       "classification": "component",
       "registration": {
@@ -2274,6 +2280,12 @@
     },
     {
       "source": "story",
+      "name": "speech",
+      "classification": "infrastructure",
+      "explanation": "The Speech story drives a Rust SpeechRecognizer and the `speech` feature's platform services rather than a catalog constructor."
+    },
+    {
+      "source": "story",
       "name": "spinner",
       "classification": "component",
       "registration": {
@@ -2451,6 +2463,25 @@
       "name": "theme",
       "classification": "infrastructure",
       "explanation": "Non-renderable theme infrastructure is consumed by registered controls."
+    },
+    {
+      "source": "story",
+      "name": "time_field",
+      "classification": "component",
+      "registration": {
+        "status": "registered",
+        "descriptor": "TimeField",
+        "exports": [
+          "TimeField"
+        ],
+        "states": [
+          {
+            "export": "TimeFieldState",
+            "kind": "TimeFieldState",
+            "role": "retained-control-state"
+          }
+        ]
+      }
     },
     {
       "source": "story",

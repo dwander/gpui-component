@@ -50,7 +50,9 @@ collapsed: false
 - [Combobox](combobox) - Searchable single-select or multi-select dropdown.
 - [NumberInput](number-input) - Numeric input with increment/decrement
 - [DatePicker](date-picker) - Date selection with calendar
+- [TimeField](time-field) - Segmented time-of-day input
 - [OtpInput](otp-input) - One-time password input
+- [Speech](speech) - Dictation through the system recognizer or your own
 - [ColorPicker](color-picker) - Color selection interface
 - [Form](form) - Form container and layout
 

@@ -73,7 +73,39 @@ let style = TextViewStyle::default()
 TextView::markdown("themed", source).style(style)
 ```
 
+Heading refinements receive the Markdown heading level (1-6) and are applied
+on top of the built-in size, weight, and spacing for that level:
+
+```rust
+use gpui_kit::{StyleRefinement, Styled as _, rems};
+
+let style = TextViewStyle::default().with_heading(|level| match level {
+    1 => StyleRefinement::default().pt(rems(1.)).pb(rems(0.75)),
+    _ => StyleRefinement::default(),
+});
+```
+
 `TextViewStyle::from_theme(&theme)` maps the semantic colors from a `gpui_kit::base::Theme`. Applications using the higher-level component theme can use `gpui_kit::component::text::text_view_style(cx.theme())`.
+
+A text view without an explicit `.style()` can follow the text color its
+container sets, so rich text stays readable on a filled surface such as a chat
+bubble. Turn it on in the application defaults:
+
+```rust
+use gpui_kit::base::{TextViewDefaults, TextViewStyle};
+
+TextViewDefaults::new()
+    .with_style(TextViewStyle::default())
+    .with_inherit_text_color(true)
+    .install(cx);
+```
+
+The body text takes the inherited color. When that color is far from the
+style's foreground in lightness, the surface is inverted from the page, so
+links, muted text, code and table backgrounds, borders and selection are derived
+from it too, and the installed syntax highlighter is left out. Enable this only
+when every window sets a text color at its root; GPUI Component's Root does,
+and Component turns it on.
 
 ## Syntax highlighting is opt-in
 
@@ -232,6 +264,17 @@ append, and Markdown that completes as it streams (`**bo` becoming bold
 `bold`) fades the changed glyphs rather than the whole paragraph. Only the
 blocks the update reaches are compared, and frames are requested only while
 something is still fading. Reduced motion skips the fade.
+
+`TextViewState::set_range_highlights` paints backgrounds behind ranges of
+`rendered_text()`, the text plain copy produces, so an application can show
+its search results or citations without reparsing or restyling the document.
+The ranges are painted, not shaped, so they never change layout.
+Ranges of the Markdown source, such as those `selected_source_range()`
+returns, convert to it with `rendered_text().range_for_source(range)`.
+`reveal_range` scrolls the line a range starts on into view, through the
+view's own list, an enclosing `gpui::list`, or `TextView::on_reveal` for any
+other container; see [Highlight ranges](../component/text-view.md#highlight-ranges)
+and [Scroll to a range](../component/text-view.md#scroll-to-a-range).
 
 Selection can copy rendered text or Markdown source through `SelectionFormat`. Link routing, code-block actions, table actions, images, and custom Markdown plugins use the same builders as the compatibility API documented on the [gpui-component TextView page](../component/text-view.md).
 

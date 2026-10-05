@@ -153,6 +153,15 @@ impl TextView {
         self.inner = self.inner.on_link_click(f);
         self
     }
+    /// Scrolls a container that ignores scroll requests to the line of
+    /// `TextViewState::reveal_range`, with the line's window bounds.
+    pub fn on_reveal<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Bounds<Pixels>, &mut Window, &mut App) + 'static,
+    {
+        self.inner = self.inner.on_reveal(f);
+        self
+    }
     /// Sets which Markdown extensions the parser accepts.
     pub fn markdown_extensions(mut self, value: MarkdownExtensions) -> Self {
         self.inner = self.inner.markdown_extensions(value);
@@ -243,8 +252,8 @@ impl Element for TextView {
                 &style.highlight_theme,
                 &crate::highlighter::HighlightTheme::default_light(),
             ) {
-                inner = inner.code_block_highlighter(super::component_code_block_highlighter(
-                    style.highlight_theme.clone(),
+                inner = inner.shared_code_block_highlighter(super::shared_code_block_highlighter(
+                    &style.highlight_theme,
                 ));
             }
             inner = inner.style(resolve_component_style(
@@ -327,18 +336,38 @@ pub(super) fn resolve_component_style(
     // a dark theme.
     let is_dark = themed.is_dark() || legacy.is_dark;
 
-    let mut style = themed
+    let heading_base_font_size = legacy.heading_base_font_size;
+    let heading_font_size = legacy.heading_font_size;
+    // A style that never touched heading sizes keeps the Base default, which
+    // scales headings with the body text; only an explicit base size or
+    // resolver pins them to pixels.
+    let pins_heading_size = heading_font_size.is_some()
+        || heading_base_font_size != TextViewStyle::default().heading_base_font_size;
+    let style = themed
         .with_paragraph_gap(legacy.paragraph_gap)
-        .with_heading_base_font_size(legacy.heading_base_font_size)
+        .with_heading(move |level| {
+            if !pins_heading_size {
+                return StyleRefinement::default();
+            }
+            let default_size = match level {
+                1 => gpui::rems(2.),
+                2 => gpui::rems(1.5),
+                3 => gpui::rems(1.25),
+                4 => gpui::rems(1.125),
+                _ => gpui::rems(1.),
+            }
+            .to_pixels(heading_base_font_size);
+            let text_size = heading_font_size.as_ref().map_or(default_size, |resolve| {
+                resolve(level, heading_base_font_size)
+            });
+            StyleRefinement::default().text_size(text_size)
+        })
         .with_code_block(code_block)
         .with_table(table)
         .with_table_head(table_head)
         .with_table_cell(table_cell)
         .with_inline_code(inline_code)
         .with_dark(is_dark);
-    if let Some(heading_font_size) = legacy.heading_font_size {
-        style = style.with_heading_font_size(move |level, base| heading_font_size(level, base));
-    }
     style
 }
 
