@@ -17,6 +17,8 @@ pub const TITLE_BAR_HEIGHT: Pixels = px(34.);
 const TITLE_BAR_LEFT_PADDING: Pixels = px(80.);
 #[cfg(not(target_os = "macos"))]
 const TITLE_BAR_LEFT_PADDING: Pixels = px(12.);
+/// 전체화면에서 왼쪽 여백에 더하는 값 (기존 안쪽 바의 `pl_3`).
+const FULLSCREEN_EXTRA_LEFT_PADDING: Pixels = px(12.);
 
 fn default_title_bar_background(title_bar: Hsla, background: Hsla) -> Background {
     let title_bar_rgb = title_bar.to_rgb();
@@ -367,7 +369,13 @@ impl RenderOnce for TitleBar {
                 .items_center()
                 .justify_between()
                 .h(TITLE_BAR_HEIGHT)
-                .pl(TITLE_BAR_LEFT_PADDING)
+                // 전체화면 추가 여백도 바깥 `pl` 에 합쳐 둔다 — 안쪽 바에 두면 호출부의 `.pl()` 로
+                // 덮을 수 없어, 좌측 여백을 직접 계산하는 앱이 전체화면에서만 밀린다.
+                .pl(if window.is_fullscreen() {
+                    TITLE_BAR_LEFT_PADDING + FULLSCREEN_EXTRA_LEFT_PADDING
+                } else {
+                    TITLE_BAR_LEFT_PADDING
+                })
                 .border_b_1()
                 .border_color(cx.theme().title_bar_border)
                 .bg(default_title_bar_background(
@@ -411,7 +419,6 @@ impl RenderOnce for TitleBar {
                         .flex_1()
                         .when(!is_web, |this| {
                             this.window_control_area(WindowControlArea::Drag)
-                                .when(window.is_fullscreen(), |this| this.pl_3())
                                 .when(is_linux && is_client_decorated, |this| {
                                     this.child(
                                         div()
