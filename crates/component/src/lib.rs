@@ -1,3 +1,6 @@
+#[cfg(feature = "gpui-fast")]
+extern crate gpui_fast as gpui;
+
 use gpui::App;
 use std::ops::Deref;
 use std::sync::LazyLock;
@@ -41,6 +44,7 @@ pub mod combobox;
 pub mod command;
 pub mod description_list;
 pub mod dialog;
+pub mod diff;
 pub mod dock;
 pub mod empty;
 pub mod form;
@@ -97,8 +101,6 @@ pub use global_state::GlobalState;
 pub use gpui_base::Root;
 pub use root::{restore_tooltip, suppress_tooltip};
 pub use gpui_base::animation;
-#[doc(hidden)]
-pub(crate) use gpui_base::resize_handle;
 pub use gpui_base::{
     AxisExt, Edges, FocusTrapElement, InteractiveElementExt, LengthExt, Measure, OngoingScrollExt,
     Placement, Side, measure, measure_if,
@@ -111,7 +113,7 @@ pub use input::{Rope, RopeExt, RopeLines};
 pub use inspector::*;
 pub use resizable::{
     ResizablePanel, ResizablePanelEvent, ResizablePanelGroup, ResizableState, h_resizable,
-    resizable_panel, resize_handle_appearance, v_resizable,
+    resizable_panel, resize_handle, resize_handle_appearance, v_resizable,
 };
 pub use styled::*;
 pub use theme::*;
@@ -135,6 +137,7 @@ pub fn init(cx: &mut App) {
     gpui_base::init(cx);
     button::init(cx);
     input::init(cx);
+    diff::init(cx);
     date_picker::init(cx);
     dock::init(cx);
     sheet::init(cx);

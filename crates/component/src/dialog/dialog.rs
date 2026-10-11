@@ -1,11 +1,13 @@
+use super::entrance::{DialogEntrance, EntranceSurface};
 use crate::root::WindowState;
 use gpui_base::TestSupportExt as _;
 use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
-    Action, Anchor, AnyElement, App, ClickEvent, Edges, FocusHandle, Hsla, InteractiveElement,
-    IntoElement, ParentElement, Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window,
-    WindowControlArea, anchored, div, hsla, point, prelude::FluentBuilder, px,
+    Action, Anchor, Animation, AnimationExt as _, AnyElement, App, BoxShadow, ClickEvent, Edges,
+    FocusHandle, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce,
+    SharedString, StyleRefinement, Styled, Window, WindowControlArea, anchored, div, hsla, point,
+    prelude::FluentBuilder, px,
 };
 use gpui_base::{ElementExt as _, TextSelectionScopeId};
 use rust_i18n::t;
@@ -13,6 +15,7 @@ use rust_i18n::t;
 use crate::{
     ActiveTheme as _, IconName, Sizable as _, StyledExt, TITLE_BAR_HEIGHT, ThemeStyled as _,
     WindowExt as _,
+    animation::cubic_bezier,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogContent, DialogDispatchAnchor, DialogTitle},
     dialog_shadow_vec,
@@ -213,6 +216,7 @@ pub(crate) struct DialogProps {
     /// 이벤트를 계속 막는다 — 뒤가 그대로 보여야 하는 대화상자(삭제 대상 확인 등)를 위한 것.
     overlay_dim: bool,
     keyboard: bool,
+    entrance: DialogEntrance,
 }
 
 impl Default for DialogProps {
@@ -227,6 +231,7 @@ impl Default for DialogProps {
             overlay_dim: true,
             close_button: true,
             overlay_closable: true,
+            entrance: DialogEntrance::default(),
         }
     }
 }
@@ -328,6 +333,12 @@ pub(crate) fn overlay_color(overlay: bool, cx: &App) -> Hsla {
     cx.theme().overlay
 }
 
+/// [PiCell 포크 패치] 테마 alpha(`Theme::dialog_shadow_alpha`) 를 쓰는 공용 프로파일
+/// `dialog_shadow_vec` 로 위임한다 — 팝업의 `popup_shadow_vec` 한 단 위.
+fn dialog_shadow(alpha: f32, delta: f32) -> Vec<BoxShadow> {
+    dialog_shadow_vec(alpha * delta)
+}
+
 impl Dialog {
     /// Create a new dialog.
     pub fn new(cx: &mut App) -> Self {
@@ -371,9 +382,7 @@ impl Dialog {
         self
     }
 
-    /// Sets the footer of the dialog, the footer will render at the bottom of the dialog, usually for action buttons.
-    ///
-    /// When you set the footer, the `button_props` will be ignored, you need to render the action buttons by yourself.
+    /// Sets the header of the dialog, rendered above the title and content.
     pub(crate) fn header(mut self, header: impl IntoElement) -> Self {
         self.header = Some(header.into_any_element());
         self
@@ -381,7 +390,12 @@ impl Dialog {
 
     /// Sets the footer of the dialog, the footer will render at the bottom of the dialog, usually for action buttons.
     ///
-    /// When you set the footer, the `button_props` will be ignored, you need to render the action buttons by yourself.
+    /// A plain `Dialog` never renders buttons from `button_props`: the props
+    /// only install the callbacks behind the `Confirm` and `Cancel` actions.
+    /// Compose the action buttons yourself — typically with a
+    /// [`DialogFooter`](crate::dialog::DialogFooter) — or use an
+    /// [`AlertDialog`](crate::dialog::AlertDialog), which builds a default
+    /// footer from `button_props` when no footer is set.
     pub fn footer(mut self, footer: impl IntoElement) -> Self {
         self.footer = Some(footer.into_any_element());
         self
@@ -392,6 +406,12 @@ impl Dialog {
     /// This overrides only the fields `button_props` sets; the rest of the
     /// dialog's button configuration is kept, so the call order does not
     /// matter.
+    ///
+    /// On a plain `Dialog` these props install the callbacks behind the
+    /// `Confirm` and `Cancel` actions and the labels an
+    /// [`AlertDialog`](crate::dialog::AlertDialog) default footer would use;
+    /// the dialog surface itself renders no buttons from them, see
+    /// [`Self::footer`].
     pub fn button_props(mut self, button_props: DialogButtonProps) -> Self {
         self.button_props.merge(button_props);
         self
@@ -501,6 +521,15 @@ impl Dialog {
         self
     }
 
+    /// Sets how the dialog enters, defaulting to [`DialogEntrance::SlideDown`].
+    ///
+    /// This controls the surface and backdrop together. Reduced motion skips
+    /// the entrance and immediately shows the final state. Closing remains immediate.
+    pub fn entrance(mut self, entrance: DialogEntrance) -> Self {
+        self.props.entrance = entrance;
+        self
+    }
+
     pub(crate) fn has_overlay(&self) -> bool {
         self.props.overlay
     }
@@ -589,6 +618,12 @@ impl RenderOnce for Dialog {
         let margin = cx.theme().spacing_tokens().lg;
         let layer_offset = px(layer_ix as f32 * 16.);
         let y = self.props.margin_top.unwrap_or(view_size.height / 10.) + layer_offset;
+        let entrance = self.props.entrance;
+        let motion = cx.theme().motion_tokens();
+        let animated = entrance != DialogEntrance::None
+            && !cx.reduce_motion()
+            && (entrance == DialogEntrance::SlideDown || !motion.duration_normal.is_zero());
+        let travel = motion.distance_short.to_pixels(window.rem_size());
         let width = self
             .props
             .width
@@ -613,11 +648,27 @@ impl RenderOnce for Dialog {
             paddings.bottom = pb.to_pixels(base_size, rem_size);
         }
 
-        // 다이얼로그 그림자 — 테마의 `dialog_shadow_alpha` 를 읽는다. 손으로 적은 검정
-        // alpha 0.1 짜리 `shadow_xl` 은 어두운 배경 + 딤 백드롭 위에서 아예 보이지 않아
-        // 대화상자가 배경에 붙은 종이처럼 떠 보이지 않았다 (같은 이유로 테마가 alpha 를
-        // 갖고 있다). 팝업이 쓰는 `popup_shadow_vec` 의 한 단 위 프로파일.
-        let shadow = dialog_shadow_vec(cx.theme().dialog_shadow_alpha);
+        // x1 = 1/3, x2 = 2/3 make the bezier's time mapping the identity,
+        // preserving the trajectory this dialog was tuned with before
+        // `cubic_bezier` solved for x; vaul's (0.32, 0.72, 0., 1.) is far
+        // more front-loaded under the CSS-correct solver.
+        let animation = if entrance == DialogEntrance::SlideDown {
+            Animation::new(*ANIMATION_DURATION).with_easing(cubic_bezier(
+                1. / 3.,
+                0.72,
+                2. / 3.,
+                1.,
+            ))
+        } else {
+            let easing = motion.easing_enter.clone();
+            // The delta drives opacity, so keep an overshooting theme curve in range.
+            Animation::new(motion.duration_normal)
+                .with_easing(move |delta| easing.sample(delta).clamp(0., 1.))
+        };
+        // [PiCell 포크 패치] 그림자는 테마의 `dialog_shadow_alpha` 를 읽는다. 상류의 검정
+        // alpha 0.1 고정값은 어두운 배경 + 딤 백드롭 위에서 아예 보이지 않아 대화상자가
+        // 배경에 붙은 종이처럼 떠 보이지 않았다. (`dialog_shadow` 참고)
+        let shadow_alpha = cx.theme().dialog_shadow_alpha;
 
         anchored()
             .position(point(window_paddings.left, window_paddings.top))
@@ -765,17 +816,80 @@ impl RenderOnce for Dialog {
                                                         .icon(IconName::Close)
                                                 })
                                         }))
-                                        // 등장 애니메이션 없음 — 최종 크기·불투명도로 바로 나타난다.
-                                        // 확대(`appear_scale`)든 페이드(`opacity`)든 요소를 오프스크린
-                                        // 레이어로 격리해 합성하는데, 격리가 끝나는 순간 버튼·글자 색이
-                                        // 눈에 띄게 바뀐다. 확인 대화상자는 빠른 작업의 길목이라
-                                        // 그 값을 치를 자리가 아니다. (스프링·이징 헬퍼는 남아 있으니
-                                        // 격리 없이 등장을 그릴 방법이 생기면 다시 붙이면 된다.)
-                                        .shadow(shadow)
-                                        .text_selection_scope(selection_scope),
-                                ),
+                                        .map(|surface| {
+                                            if animated {
+                                                surface
+                                                    .with_animation(
+                                                        "slide-down-shadow",
+                                                        animation.clone(),
+                                                        move |surface, delta| {
+                                                            surface.shadow(dialog_shadow(
+                                                                shadow_alpha,
+                                                                delta,
+                                                            ))
+                                                        },
+                                                    )
+                                                    .text_selection_scope(selection_scope)
+                                                    .into_any_element()
+                                            } else {
+                                                surface
+                                                    .shadow(dialog_shadow(shadow_alpha, 1.))
+                                                    .text_selection_scope(selection_scope)
+                                                    .into_any_element()
+                                            }
+                                        })
+                                        .map(|surface| {
+                                            if animated && entrance == DialogEntrance::FadeSlide {
+                                                EntranceSurface::new(
+                                                    surface,
+                                                    travel,
+                                                    window_paddings.top + margin,
+                                                )
+                                                .with_animation(
+                                                    "dialog-settle",
+                                                    animation.clone(),
+                                                    |mut surface, delta| {
+                                                        surface.progress = delta;
+                                                        surface
+                                                    },
+                                                )
+                                                .into_any_element()
+                                            } else {
+                                                surface
+                                            }
+                                        }),
+                                )
+                                .map(|positioner| {
+                                    if animated && entrance == DialogEntrance::SlideDown {
+                                        positioner
+                                            .with_animation(
+                                                "slide-down",
+                                                animation.clone(),
+                                                move |this, delta| {
+                                                    this.position(point(
+                                                        window_paddings.left + x,
+                                                        window_paddings.top + y * delta,
+                                                    ))
+                                                },
+                                            )
+                                            .into_any_element()
+                                    } else {
+                                        positioner.into_any_element()
+                                    }
+                                }),
                             ),
-                    ),
+                    )
+                    .map(|layer| {
+                        if animated {
+                            layer
+                                .with_animation("fade-in", animation, |layer, delta| {
+                                    layer.opacity(delta)
+                                })
+                                .into_any_element()
+                        } else {
+                            layer.into_any_element()
+                        }
+                    }),
             )
             .into_any_element()
     }
@@ -912,5 +1026,101 @@ pub(crate) mod tests {
         assert!(first.bottom() <= viewport.height - px(16.), "{first:?}");
         assert!(second.bottom() <= viewport.height - px(16.), "{second:?}");
         assert!(second.size.height < first.size.height);
+    }
+
+    #[gpui::test]
+    fn test_dialog_entrance_builder(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        cx.update(|cx| {
+            assert_eq!(Dialog::new(cx).props.entrance, DialogEntrance::SlideDown);
+            for entrance in [
+                DialogEntrance::SlideDown,
+                DialogEntrance::Fade,
+                DialogEntrance::FadeSlide,
+                DialogEntrance::None,
+            ] {
+                assert_eq!(Dialog::new(cx).entrance(entrance).props.entrance, entrance);
+            }
+        });
+    }
+
+    #[gpui::test]
+    fn reduced_motion_displays_every_entrance_at_rest(cx: &mut TestAppContext) {
+        for entrance in [
+            DialogEntrance::SlideDown,
+            DialogEntrance::Fade,
+            DialogEntrance::FadeSlide,
+            DialogEntrance::None,
+        ] {
+            let cx = window(cx, size(px(1000.), px(800.)));
+            open(cx, move |dialog, _, _| {
+                dialog
+                    .title("Entrance")
+                    .child("body")
+                    .entrance(entrance)
+                    .margin_top(px(300.))
+            });
+            assert_eq!(surface(cx, 0).top(), px(300.));
+        }
+    }
+
+    #[gpui::test]
+    fn no_entrance_displays_immediately_and_keeps_keyboard_dismissal(cx: &mut TestAppContext) {
+        let cx = window(cx, size(px(1000.), px(800.)));
+        cx.update(|_, cx| cx.set_reduce_motion(false));
+        open(cx, |dialog, _, _| {
+            dialog
+                .title("Immediate")
+                .child("body")
+                .entrance(DialogEntrance::None)
+                .margin_top(px(300.))
+        });
+        assert_eq!(surface(cx, 0).top(), px(300.));
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| assert!(WindowState::read(window, cx).active_dialogs.is_empty()));
+    }
+
+    #[gpui::test]
+    fn zero_theme_duration_displays_fade_entrances_immediately(cx: &mut TestAppContext) {
+        for entrance in [DialogEntrance::Fade, DialogEntrance::FadeSlide] {
+            let cx = window(cx, size(px(1000.), px(800.)));
+            cx.update(|_, cx| {
+                cx.set_reduce_motion(false);
+                crate::Theme::update(cx, |theme| theme.motion.duration_normal = Duration::ZERO);
+            });
+            open(cx, move |dialog, _, _| {
+                dialog
+                    .title("Immediate")
+                    .child("body")
+                    .entrance(entrance)
+                    .margin_top(px(300.))
+            });
+            assert_eq!(surface(cx, 0).top(), px(300.));
+        }
+    }
+
+    #[gpui::test]
+    fn alert_dialog_uses_the_same_entrance(cx: &mut TestAppContext) {
+        for entrance in [
+            DialogEntrance::SlideDown,
+            DialogEntrance::Fade,
+            DialogEntrance::FadeSlide,
+            DialogEntrance::None,
+        ] {
+            let cx = window(cx, size(px(1000.), px(800.)));
+            cx.update(|window, cx| {
+                let alert = crate::dialog::AlertDialog::new(cx)
+                    .title("Alert")
+                    .entrance(entrance);
+                assert_eq!(alert.build_surface(window, cx).props.entrance, entrance);
+                window.open_alert_dialog(cx, move |alert, _, _| {
+                    alert.title("Alert").entrance(entrance)
+                });
+            });
+            cx.run_until_parked();
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            assert_eq!(surface(cx, 0).top(), px(80.));
+        }
     }
 }
