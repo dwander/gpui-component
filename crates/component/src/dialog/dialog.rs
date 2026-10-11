@@ -231,7 +231,10 @@ impl Default for DialogProps {
             overlay_dim: true,
             close_button: true,
             overlay_closable: true,
-            entrance: DialogEntrance::default(),
+            // [PiCell 포크 패치] 기본 등장은 None(즉시 표시). 확대·페이드 등장은 요소를
+            // 오프스크린 레이어로 격리해 합성하는데, 격리가 끝나는 순간 버튼·글자 색이 눈에
+            // 띄게 바뀐다. 확인 대화상자는 빠른 작업의 길목이라 그 값을 치를 자리가 아니다.
+            entrance: DialogEntrance::None,
         }
     }
 }
@@ -1032,7 +1035,8 @@ pub(crate) mod tests {
     fn test_dialog_entrance_builder(cx: &mut TestAppContext) {
         cx.update(crate::init);
         cx.update(|cx| {
-            assert_eq!(Dialog::new(cx).props.entrance, DialogEntrance::SlideDown);
+            // [PiCell 포크 패치] 기본 등장은 None (DialogProps::default 참고)
+            assert_eq!(Dialog::new(cx).props.entrance, DialogEntrance::None);
             for entrance in [
                 DialogEntrance::SlideDown,
                 DialogEntrance::Fade,
