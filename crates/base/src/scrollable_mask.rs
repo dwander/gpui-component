@@ -4,7 +4,7 @@ use std::rc::Rc;
 use gpui::{
     App, Axis, BorderStyle, Bounds, ContentMask, Edges, Element, ElementId, GlobalElementId,
     Hitbox, Hsla, InteractiveElement as _, IntoElement, IsZero as _, LayoutId, OngoingScroll,
-    PaintQuad, ParentElement as _, Point, Position, ScrollDelta, ScrollHandle, ScrollWheelEvent,
+    PaintQuad, ParentElement as _, Point, Position, ScrollDelta, ScrollEvent, ScrollHandle,
     StatefulInteractiveElement as _, Style, StyleRefinement, Styled as _, Window, div, px,
     relative,
 };
@@ -460,7 +460,7 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
                 let hitbox_id = hitbox.id;
                 let ongoing_scroll = ongoing_scroll.clone();
 
-                move |event: &ScrollWheelEvent, phase, window, cx| {
+                move |event: &ScrollEvent, phase, window, cx| {
                     // Handle in the capture phase: ancestor scrollers such as
                     // `gpui::list` register their wheel listeners after their
                     // children paint, so in the bubble phase (reverse

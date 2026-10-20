@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gpui::{
     App, Axis, Bounds, ContentMask, Element, ElementId, GlobalElementId, Hitbox, IntoElement,
     IsZero as _, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    OngoingScroll, Position, ScrollWheelEvent, Style, TouchPhase, Window, relative,
+    OngoingScroll, Position, ScrollEvent, Style, TouchPhase, Window, relative,
 };
 
 use super::state::CarouselState;
@@ -177,7 +177,7 @@ impl Element for CarouselScrollMask {
                 }
             });
 
-            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if !phase.capture() || !hitbox_id.should_handle_scroll(window) {
                     return;
                 }

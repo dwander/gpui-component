@@ -5,7 +5,7 @@ use crate::{OngoingScrollExt as _, ScrollbarHandle};
 use gpui::{
     AnyElement, App, Bounds, ContentMask, DispatchPhase, Element, ElementId, Global,
     GlobalElementId, Hitbox, HitboxBehavior, HitboxId, InspectorElementId, IntoElement, LayoutId,
-    OngoingScroll, Pixels, ScrollDelta, ScrollWheelEvent, TouchPhase, Window, point, px,
+    OngoingScroll, Pixels, ScrollDelta, ScrollEvent, TouchPhase, Window, point, px,
 };
 #[cfg(not(target_family = "wasm"))]
 use std::time::Instant;
@@ -385,7 +385,7 @@ impl Element for ScrollBounce {
         if self.scroll_wheel {
             let hitbox = prepaint.hitbox.id;
             let handle = self.handle.clone();
-            window.on_mouse_event(move |_: &ScrollWheelEvent, phase, window, cx| {
+            window.on_mouse_event(move |_: &ScrollEvent, phase, window, cx| {
                 if phase == DispatchPhase::Capture
                     && hitbox.should_handle_scroll(window)
                     && max_scroll_extent(handle.as_ref()) > px(0.)
@@ -402,7 +402,7 @@ impl Element for ScrollBounce {
             let on_scroll = self.on_scroll.clone();
             let mut before = 0.;
             let mut allow_end_bounce = false;
-            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 let ScrollDelta::Pixels(mut delta) = event.delta else {
                     if phase == DispatchPhase::Capture && hitbox.should_handle_scroll(window) {
                         let mut state = state.borrow_mut();
@@ -554,7 +554,7 @@ impl Element for ScrollBounce {
             let handle = self.handle.clone();
             let view = window.current_view();
             let on_scroll = self.on_scroll.clone();
-            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
                 if phase != DispatchPhase::Capture
                     || !hitbox.should_handle_scroll(window)
                     || !owns_scroll(hitbox, cx)
