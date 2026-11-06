@@ -40,7 +40,6 @@ members = [
     "examples/ai_recipes",
     "examples/speech",
     "crates/shell",
-    "crates/shell/rquickjs-compat",
 ]
 resolver = "2"
 
@@ -49,14 +48,14 @@ publish = false
 edition = "2024"
 
 [workspace.dependencies]
-gpui-kit = { path = "crates/kit", version = "0.8.0" }
-gpui-component = { path = "crates/component", version = "0.8.0" }
-gpui-base = { path = "crates/base", version = "0.8.0" }
-gpui-component-macros = { path = "crates/component-macros", version = "0.8.0" }
-gpui-kit-assets = { path = "crates/assets", version = "0.8.0" }
-gpui-fps = { path = "crates/fps", version = "0.8.0" }
-gpui-shell = { path = "crates/shell", version = "0.8.0" }
-gpui-webview = { path = "crates/webview", version = "0.8.0" }
+gpui-kit = { path = "crates/kit", version = "0.9.0" }
+gpui-component = { path = "crates/component", version = "0.9.0" }
+gpui-base = { path = "crates/base", version = "0.9.0" }
+gpui-component-macros = { path = "crates/component-macros", version = "0.9.0" }
+gpui-kit-assets = { path = "crates/assets", version = "0.9.0" }
+gpui-fps = { path = "crates/fps", version = "0.9.0" }
+gpui-shell = { path = "crates/shell", version = "0.9.0" }
+gpui-webview = { path = "crates/webview", version = "0.9.0" }
 story = { path = "crates/story" }
 
 # [PiCell 포크 패치] 업스트림은 이 5개를 crates.io 의 `gpui-pre-*`(longbridge 가 재배포하는
@@ -72,11 +71,11 @@ gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed"
 reqwest_client = { git = "https://github.com/zed-industries/zed" }
 # gpui-fast 는 선택 의존(`gpui-fast` 피처)이라 우리 빌드에는 끌려오지 않는다. 하위 크레이트가
 # `workspace = true` 로 참조하므로 항목 자체는 지우면 안 된다(매니페스트 파싱이 깨진다).
-gpui-fast = { package = "gpui-fast", version = "0.1.10", features = ["windows-manifest-provided-by-host"] }
-gpui-fast-platform = { package = "gpui-fast-platform", version = "0.1.10", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
-gpui-fast-web = { package = "gpui-fast-web", version = "0.1.10" }
+gpui-fast = { package = "gpui-fast", version = "0.1.13", features = ["windows-manifest-provided-by-host"] }
+gpui-fast-platform = { package = "gpui-fast-platform", version = "0.1.13", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui-fast-web = { package = "gpui-fast-web", version = "0.1.13" }
 # sum-tree 는 gpui 에 의존하지 않아 이중 링크 위험이 없다 — 업스트림 범프를 따른다.
-sum-tree = { package = "gpui-pre-sum-tree", version = "=0.3.9" }
+sum-tree = { package = "gpui-pre-sum-tree", version = "=0.3.11" }
 reqwest = { package = "gpui-pre-reqwest", version = "=0.12.15", default-features = false, features = [
     "charset",
     "http2",
@@ -183,12 +182,6 @@ cap-std = { opt-level = 3 }
 # a release binary (`gpui-shell`: 106 MB to 78 MB on Linux x86_64).
 [profile.release]
 strip = "symbols"
-
-[patch.crates-io]
-# LLRT's public modules still name their compatible binding dependency
-# `rquickjs`. Route those dependencies through a source-compatible facade so
-# the shell and LLRT share the exact same quickjs-jit types and VM.
-rquickjs = { path = "crates/shell/rquickjs-compat" }
 
 [workspace.metadata.typos]
 files.extend-exclude = ["**/fixtures/*"]

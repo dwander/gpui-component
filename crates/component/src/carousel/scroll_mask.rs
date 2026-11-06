@@ -268,7 +268,7 @@ mod tests {
 
     use gpui::{
         AppContext as _, Axis, Context, Entity, InteractiveElement as _, IntoElement, Modifiers,
-        MouseButton, ParentElement as _, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent,
+        MouseButton, ParentElement as _, Render, ScrollDelta, ScrollEvent, ScrollHandle,
         StatefulInteractiveElement as _, Styled as _, TestAppContext, TouchPhase,
         VisualTestContext, Window, div, point, px,
     };
@@ -404,7 +404,7 @@ mod tests {
     }
 
     fn wheel_line(cx: &mut VisualTestContext, lines: f32) {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: point(px(20.), px(20.)),
             delta: ScrollDelta::Lines(point(0., lines)),
             ..Default::default()
@@ -412,7 +412,7 @@ mod tests {
     }
 
     fn swipe(cx: &mut VisualTestContext, delta: f32, touch_phase: TouchPhase) {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: point(px(20.), px(20.)),
             delta: ScrollDelta::Pixels(point(px(0.), px(delta))),
             touch_phase,

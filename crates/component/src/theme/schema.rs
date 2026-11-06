@@ -21,6 +21,7 @@ fn try_parse_theme_token(value: &str) -> anyhow::Result<ThemeToken> {
 /// Represents a theme configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct ThemeSet {
     /// The name of the theme set.
     pub name: SharedString,
@@ -35,6 +36,7 @@ pub struct ThemeSet {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct ThemeConfig {
     /// Whether this theme is the default theme.
     pub is_default: bool,
@@ -91,6 +93,7 @@ pub struct ThemeConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticThemeConfig {
     pub colors: SemanticColorConfig,
     pub radius: SemanticRadiusConfig,
@@ -105,12 +108,14 @@ pub struct SemanticThemeConfig {
 /// semantic tokens does not change the legacy public struct shape.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticThemeConfigFile {
     pub tokens: SemanticThemeConfig,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticColorConfig {
     pub background: Option<SharedString>,
     pub foreground: Option<SharedString>,
@@ -133,6 +138,7 @@ pub struct SemanticColorConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticRadiusConfig {
     pub none: Option<f32>,
     pub sm: Option<f32>,
@@ -144,6 +150,7 @@ pub struct SemanticRadiusConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticSpacingConfig {
     pub xxs: Option<f32>,
     pub xs: Option<f32>,
@@ -156,6 +163,7 @@ pub struct SemanticSpacingConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticTextStyleConfig {
     pub size: Option<f32>,
     pub line_height: Option<f32>,
@@ -164,6 +172,7 @@ pub struct SemanticTextStyleConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticTypographyConfig {
     pub sans: Option<SharedString>,
     pub mono: Option<SharedString>,
@@ -177,6 +186,7 @@ pub struct SemanticTypographyConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SemanticShadowConfig {
     pub sm: Option<Vec<BoxShadow>>,
     pub md: Option<Vec<BoxShadow>>,
@@ -258,6 +268,7 @@ fn apply_text_style(config: &SemanticTextStyleConfig, token: &mut gpui_base::Tex
 }
 
 #[derive(Debug, Default, Clone, JsonSchema, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ThemeConfigColors {
     /// Used for accents such as hover background on MenuItem, ListItem, etc.
     #[serde(rename = "accent.background")]
