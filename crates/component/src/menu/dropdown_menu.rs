@@ -207,14 +207,6 @@ impl TriggerFocus {
     }
 }
 
-impl IntoElement for TriggerFocus {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl Element for TriggerFocus {
     type RequestLayoutState = TriggerFocusFrame;
     type PrepaintState = ();

@@ -10,7 +10,7 @@ use crate::{
 use gpui::{
     Anchor, App, Axis, Background, BorderStyle, Bounds, ContentMask, CursorStyle, Edges, Element,
     ElementId, EntityId, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId,
-    IntoElement, IsZero, LayoutId, ListState, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    IsZero, LayoutId, ListState, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     PaintQuad, Pixels, Point, Position, ScrollEvent, ScrollHandle, Size, Style, TouchDragEvent,
     TouchPhase, UniformListScrollHandle, Window, fill, point, prelude::FluentBuilder, px, relative,
     size,
@@ -1162,14 +1162,6 @@ impl Scrollbar {
             ),
         );
         (thumb, track, border, width, inset, radius, min_length)
-    }
-}
-
-impl IntoElement for Scrollbar {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
     }
 }
 
@@ -2786,12 +2778,6 @@ mod tests {
         struct Probe {
             scrollbar: Scrollbar,
             painted: Rc<Cell<Bounds<Pixels>>>,
-        }
-        impl IntoElement for Probe {
-            type Element = Self;
-            fn into_element(self) -> Self {
-                self
-            }
         }
         impl Element for Probe {
             type RequestLayoutState = ();

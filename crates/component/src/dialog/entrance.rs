@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, App, Bounds, Element, ElementId, GlobalElementId, InspectorElementId, IntoElement,
+    AnyElement, App, Bounds, Element, ElementId, GlobalElementId, InspectorElementId,
     LayoutId, Pixels, Window, point, px,
 };
 use serde::{Deserialize, Serialize};
@@ -43,14 +43,6 @@ impl EntranceSurface {
             top_limit,
             progress: 0.,
         }
-    }
-}
-
-impl IntoElement for EntranceSurface {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
     }
 }
 
