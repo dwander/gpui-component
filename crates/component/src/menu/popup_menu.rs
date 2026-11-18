@@ -8,11 +8,12 @@ use crate::{
 };
 use crate::{Side, Size, kbd::Kbd};
 use gpui::{
-    Action, Anchor, AnyElement, App, AppContext, Bounds, Context, DismissEvent, Edges, Entity,
+    Action, Anchor, AnchoredPositionMode, AnyElement, App, AppContext, Bounds, Context,
+    DismissEvent, Edges, Entity,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, Pixels, Rems, Render, Role, ScrollHandle, SharedString,
     StatefulInteractiveElement, Styled, WeakEntity, Window, anchored, deferred, div,
-    prelude::FluentBuilder, px, rems,
+    prelude::FluentBuilder, point, px, rems, size,
 };
 use gpui::{ClickEvent, Half, MouseDownEvent, OwnedMenuItem, Point, Subscription};
 use gpui_base::TestSupportExt as _;
@@ -339,8 +340,6 @@ pub struct PopupMenu {
     scroll_to_checked_frames: u8,
     external_link_icon: bool,
     scroll_handle: ScrollHandle,
-    // This will update on render
-    submenu_anchor: (Anchor, Pixels),
 
     /// Paint priority for this menu layer. The top-level menu starts at 1 and
     /// each nested submenu increments it, so deeper levels are always drawn on
@@ -384,7 +383,6 @@ impl PopupMenu {
             scroll_handle: ScrollHandle::default(),
             external_link_icon: true,
             size: Size::default(),
-            submenu_anchor: (Anchor::TopLeft, Pixels::ZERO),
             priority: gpui_base::POPUP_PRIORITY,
             _subscriptions: vec![],
         }
@@ -1094,7 +1092,7 @@ impl PopupMenu {
     }
 
     fn select_left(&mut self, _: &SelectLeft, window: &mut Window, cx: &mut Context<Self>) {
-        let handled = if matches!(self.submenu_anchor.0, Anchor::TopLeft | Anchor::BottomLeft) {
+        let handled = if self.submenu_side(cx).is_right() {
             self._unselect_submenu(window, cx)
         } else {
             self._select_submenu(window, cx)
@@ -1115,7 +1113,7 @@ impl PopupMenu {
     }
 
     fn select_right(&mut self, _: &SelectRight, window: &mut Window, cx: &mut Context<Self>) {
-        let handled = if matches!(self.submenu_anchor.0, Anchor::TopLeft | Anchor::BottomLeft) {
+        let handled = if self.submenu_side(cx).is_right() {
             self._select_submenu(window, cx)
         } else {
             self._unselect_submenu(window, cx)
@@ -1182,20 +1180,34 @@ impl PopupMenu {
         });
     }
 
+    /// [PiCell] Which side of this menu its open submenu was drawn on. The submenu is
+    /// `attach`ed to its row, which picks the side while laying it out with its real
+    /// size, so the side is read back from where the two menus were drawn. Until the
+    /// submenu has been drawn it is on the right, the side `attach` tries first.
+    fn submenu_side(&self, cx: &App) -> Side {
+        let Some(submenu) = self.active_submenu() else {
+            return Side::Right;
+        };
+        let submenu = submenu.read(cx).bounds;
+        if submenu.size.width > Pixels::ZERO && submenu.center().x < self.bounds.center().x {
+            Side::Left
+        } else {
+            Side::Right
+        }
+    }
+
+    /// [PiCell] Which side of this submenu its parent menu is, read from where both were
+    /// drawn. Not the parent's [`Self::submenu_side`]: that reads this menu, which is the
+    /// one being updated here.
     fn parent_side(&self, cx: &App) -> Side {
-        let Some(parent) = self.parent_menu.as_ref() else {
+        let Some(parent) = self.parent_menu.as_ref().and_then(|parent| parent.upgrade()) else {
             return Side::Left;
         };
-
-        let Some(parent) = parent.upgrade() else {
-            return Side::Left;
-        };
-
-        match parent.read(cx).submenu_anchor.0 {
-            Anchor::TopLeft | Anchor::BottomLeft => Side::Left,
-            Anchor::TopRight | Anchor::BottomRight => Side::Right,
-            // Center anchors are not used for submenu positioning, but we must cover them.
-            _ => Side::Left,
+        let parent = parent.read(cx).bounds;
+        if self.bounds.size.width > Pixels::ZERO && self.bounds.center().x < parent.center().x {
+            Side::Right
+        } else {
+            Side::Left
         }
     }
 
@@ -1321,38 +1333,6 @@ impl PopupMenu {
         };
 
         Some(icon.xsmall())
-    }
-
-    /// Calculate the anchor corner and left offset for child submenu
-    fn update_submenu_menu_anchor(&mut self, window: &Window, cx: &App) {
-        let bounds = self.bounds;
-        // Open the submenu on the left only when, placed at this menu's right
-        // edge, it would run past the window's. Its width is the one it was
-        // last drawn at, or this menu's own until it has been drawn.
-        let submenu_width = self
-            .selected_index
-            .and_then(|ix| match self.menu_items.get(ix) {
-                Some(PopupMenuItem::Submenu { menu, .. }) => Some(menu.read(cx).bounds.size.width),
-                _ => None,
-            })
-            .filter(|width| *width > Pixels::ZERO)
-            .unwrap_or(bounds.size.width);
-        let rem_size = window.rem_size();
-        let (anchor, left) = if bounds.right() + submenu_width > window.viewport_size().width {
-            (Anchor::TopRight, -rems(1.).to_pixels(rem_size))
-        } else {
-            (
-                Anchor::TopLeft,
-                bounds.size.width - rems(0.5).to_pixels(rem_size),
-            )
-        };
-
-        let is_bottom_pos = bounds.origin.y + bounds.size.height > window.bounds().size.height;
-        self.submenu_anchor = if is_bottom_pos {
-            (anchor.other_side_along(gpui::Axis::Vertical), left)
-        } else {
-            (anchor, left)
-        };
     }
 
     fn render_item(
@@ -1565,27 +1545,45 @@ impl PopupMenu {
                         ),
                 )
                 .when(selected, |this| {
-                    this.child({
-                        let (anchor, left) = self.submenu_anchor;
-                        let is_bottom_pos =
-                            matches!(anchor, Anchor::BottomLeft | Anchor::BottomRight);
-                        deferred(
-                            anchored()
-                                .anchor(anchor)
-                                .child(
-                                    div()
-                                        .id("submenu")
-                                        .test_support()
-                                        .occlude()
-                                        .when(is_bottom_pos, |this| this.bottom_0())
-                                        .when(!is_bottom_pos, |this| this.top_neg_1())
-                                        .left(left)
-                                        .child(menu.clone()),
-                                )
-                                .snap_to_window_with_margin(Edges::all(EDGE_PADDING)),
-                        )
-                        .with_priority(self.priority + 1)
-                    })
+                    // [PiCell] `attach` the submenu to this menu's edge beside the row: it
+                    // opens on the right and moves to the left only when its real size
+                    // doesn't fit, decided while laying it out. Guessing the side while
+                    // rendering, from the width it was last drawn at, opened a submenu on
+                    // the wrong side until a second frame, which a notify while drawing had
+                    // to ask for. A vertical overflow is snapped back into the window.
+                    //
+                    // The target is relative to the row's top-left: the items container's
+                    // `p_1` to the left of it, as wide as the menu was last drawn (the
+                    // submenu only opens on a menu already drawn), one item tall. The
+                    // offset keeps the submenu that `p_1` clear of the menu and raises it by
+                    // its own `p_1`, so its first item is level with the row (what the
+                    // upstream `left`/`top_neg_1` offsets did).
+                    let rem_size = window.rem_size();
+                    let inset = rems(0.25).to_pixels(rem_size);
+                    let target = Bounds::new(
+                        point(-inset, Pixels::ZERO),
+                        size(self.bounds.size.width, item_height.to_pixels(rem_size)),
+                    );
+                    this.child(
+                        div().absolute().top_0().left_0().w(px(0.)).h(px(0.)).child(
+                            deferred(
+                                anchored()
+                                    .position_mode(AnchoredPositionMode::Local)
+                                    .attach(target, Anchor::TopRight)
+                                    .anchor(Anchor::TopLeft)
+                                    .offset(point(inset, -inset))
+                                    .snap_to_window_with_margin(Edges::all(EDGE_PADDING))
+                                    .child(
+                                        div()
+                                            .id("submenu")
+                                            .test_support()
+                                            .occlude()
+                                            .child(menu.clone()),
+                                    ),
+                            )
+                            .with_priority(self.priority + 1),
+                        ),
+                    )
                 }),
         }
     }
@@ -1608,8 +1606,6 @@ struct RenderOptions {
 
 impl Render for PopupMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.update_submenu_menu_anchor(window, cx);
-
         // Submenus attached via the public `item()` + `PopupMenuItem::submenu()`
         // path (from contexts that only have the menu value, e.g. a table
         // delegate's `context_menu`) have no parent wired at construction time.
@@ -1694,21 +1690,7 @@ impl Render for PopupMenu {
                             .filter(|(ix, item)| !(*ix + 1 == items_count && item.is_separator()))
                             .map(|(ix, item)| self.render_item(ix, item, options, window, cx)),
                     )
-                    .on_prepaint(move |bounds, _, cx| {
-                        view.update(cx, |menu, cx| {
-                            let width_changed = menu.bounds.size.width != bounds.size.width;
-                            menu.bounds = bounds;
-                            if width_changed {
-                                if let Some(parent) = menu
-                                    .parent_menu
-                                    .as_ref()
-                                    .and_then(|parent| parent.upgrade())
-                                {
-                                    parent.update(cx, |_, cx| cx.notify());
-                                }
-                            }
-                        });
-                    }),
+                    .on_prepaint(move |bounds, _, cx| view.update(cx, |r, _| r.bounds = bounds)),
             )
             .when(self.scrollable, |this| {
                 this.vertical_scrollbar(&self.scroll_handle)
